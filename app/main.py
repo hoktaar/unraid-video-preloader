@@ -641,8 +641,13 @@ async def _find_next_episodes(
         seasons = data.get("response", {}).get("data", {}).get("children_list", [])
         logger.debug(f"Gefundene Staffeln: {len(seasons)}")
 
+        # Konvertiere last_season und last_episode zu int (falls String)
+        last_season = int(last_season) if last_season else 0
+        last_episode = int(last_episode) if last_episode else 0
+
         for season in seasons:
-            season_num = season.get("media_index", 0)
+            # Konvertiere zu int (API kann Strings zurückgeben)
+            season_num = int(season.get("media_index", 0) or 0)
 
             # Überspringe frühere Staffeln
             if season_num < last_season:
@@ -667,7 +672,8 @@ async def _find_next_episodes(
             logger.debug(f"Staffel {season_num}: {len(eps)} Episoden")
 
             for ep in eps:
-                ep_num = ep.get("media_index", 0)
+                # Konvertiere zu int
+                ep_num = int(ep.get("media_index", 0) or 0)
 
                 # Nur Folgen nach der aktuell geschauten
                 if season_num == last_season and ep_num <= last_episode:
