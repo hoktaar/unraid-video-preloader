@@ -1,10 +1,18 @@
-# 🎬 Unraid Video Preloader
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/icon.png" alt="Video Preloader Logo" width="128" height="128">
+</p>
 
-[![Docker Image](https://img.shields.io/docker/v/derbarnimer/unraid-video-preloader?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/derbarnimer/unraid-video-preloader)
-[![Docker Pulls](https://img.shields.io/docker/pulls/derbarnimer/unraid-video-preloader?logo=docker)](https://hub.docker.com/r/derbarnimer/unraid-video-preloader)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<h1 align="center">🎬 Unraid Video Preloader</h1>
 
-**Smart video caching for Plex & Jellyfin** | **Intelligentes Video-Caching für Plex & Jellyfin**
+<p align="center">
+  <a href="https://hub.docker.com/r/derbarnimer/unraid-video-preloader"><img src="https://img.shields.io/docker/v/derbarnimer/unraid-video-preloader?label=Docker%20Hub&logo=docker" alt="Docker Image"></a>
+  <a href="https://hub.docker.com/r/derbarnimer/unraid-video-preloader"><img src="https://img.shields.io/docker/pulls/derbarnimer/unraid-video-preloader?logo=docker" alt="Docker Pulls"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <b>Smart video caching for Plex & Jellyfin</b> | <b>Intelligentes Video-Caching für Plex & Jellyfin</b>
+</p>
 
 ---
 
