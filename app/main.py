@@ -881,26 +881,32 @@ async def fetch_plex_on_deck() -> List[str]:
 
 # --- PRELOAD LOGIC ---
 
-def discover_files(source: str = "filesystem") -> List[tuple]:
+def discover_files() -> List[tuple]:
     """
     Entdeckt Video-Dateien basierend auf Konfiguration.
-
-    Args:
-        source: Quelle der Dateien (filesystem, priority, tautulli, plex).
 
     Returns:
         Liste von (priority, mtime, filepath) Tupeln.
     """
+    global state
     files = []
     min_size_bytes = config.min_size_mb * 1024 * 1024
+    scanned_count = 0
 
     def scan_path(path: str, priority: int = 0):
+        nonlocal scanned_count
         if not os.path.exists(path):
             logger.warning(f"Path not found: {path}")
             return
 
         for root, _, filenames in os.walk(path):
             for filename in filenames:
+                scanned_count += 1
+
+                # Update Status alle 100 Dateien
+                if scanned_count % 100 == 0:
+                    state.current_action = f"Scanning... ({scanned_count} files)"
+
                 if not is_video_file(filename, config.video_extensions):
                     continue
 
@@ -926,6 +932,7 @@ def discover_files(source: str = "filesystem") -> List[tuple]:
     for path in config.video_paths:
         scan_path(path, priority=100)
 
+    logger.info(f"Filesystem scan: {len(files)} video files found ({scanned_count} total scanned)")
     return files
 
 
