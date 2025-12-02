@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unraid Video Preloader</title>
+    <title>{{ t.title }} v{{ version }}</title>
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -18,11 +18,14 @@
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-8">
-        <div>
-            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-                Video Preloader <span class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 ml-2">v4.0</span>
-            </h1>
-            <p class="text-gray-400 text-sm mt-1">Smart caching for Plex & Jellyfin with Tautulli integration</p>
+        <div class="flex items-center gap-4">
+            <img src="https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/icon.png" alt="Logo" class="w-12 h-12 rounded-lg">
+            <div>
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                    {{ t.title }} <span class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 ml-2">v{{ version }}</span>
+                </h1>
+                <p class="text-gray-400 text-sm mt-1">{{ t.subtitle }}</p>
+            </div>
         </div>
 
         <!-- Status Indicator (Polled) -->
@@ -30,7 +33,7 @@
 
         <div class="text-right">
             <div id="ram-display" class="text-2xl font-mono font-bold">--%</div>
-            <div class="text-xs text-gray-500">RAM Usage</div>
+            <div class="text-xs text-gray-500">{{ t.ram_usage }}</div>
             <div id="scheduler-status" class="text-xs text-gray-500 mt-1"></div>
         </div>
     </div>
@@ -43,37 +46,37 @@
             <!-- Dashboard Card -->
             <div class="glass rounded-xl p-6 shadow-xl">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold">Status</h2>
+                    <h2 class="text-xl font-semibold">{{ t.status }}</h2>
                     <span id="status-text" class="text-sm font-mono text-blue-300">Idle</span>
                 </div>
 
                 <div class="grid grid-cols-4 gap-4 mb-6">
                     <div class="bg-slate-800/50 p-4 rounded-lg text-center">
                         <div id="stat-preloaded" class="text-2xl font-bold text-emerald-400">{{ state.last_run_stats.preloaded }}</div>
-                        <div class="text-xs text-gray-400">Preloaded</div>
+                        <div class="text-xs text-gray-400">{{ t.loaded }}</div>
                     </div>
                     <div class="bg-slate-800/50 p-4 rounded-lg text-center">
-                        <div id="stat-skipped" class="text-2xl font-bold text-blue-400">{{ state.last_run_stats.skipped }}</div>
-                        <div class="text-xs text-gray-400">Cached</div>
+                        <div id="stat-cached" class="text-2xl font-bold text-blue-400">{{ state.last_run_stats.total_cached }}</div>
+                        <div class="text-xs text-gray-400">{{ t.total_cached }}</div>
                     </div>
                     <div class="bg-slate-800/50 p-4 rounded-lg text-center">
                         <div id="stat-duration" class="text-2xl font-bold text-purple-400">{{ state.last_run_stats.duration }}s</div>
-                        <div class="text-xs text-gray-400">Duration</div>
+                        <div class="text-xs text-gray-400">{{ t.duration }}</div>
                     </div>
                     <div class="bg-slate-800/50 p-4 rounded-lg text-center">
                         <div id="stat-lastrun" class="text-sm font-bold text-orange-400">{{ state.last_run_stats.last_run }}</div>
-                        <div class="text-xs text-gray-400">Last Run</div>
+                        <div class="text-xs text-gray-400">{{ t.last_run }}</div>
                     </div>
                 </div>
 
                 <div class="flex gap-4">
                     <button hx-post="/start" hx-swap="none" id="start-btn"
                             class="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg font-bold shadow-lg transition-all transform active:scale-95 disabled:opacity-50">
-                        ▶ Run Preloader Now
+                        ▶ {{ t.run_now }}
                     </button>
                     <button onclick="showTab('history')"
                             class="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold transition-all">
-                        📊 History
+                        📊 {{ t.history }}
                     </button>
                 </div>
             </div>
@@ -82,10 +85,10 @@
             <div class="glass rounded-xl shadow-xl overflow-hidden">
                 <div class="flex border-b border-slate-700">
                     <button onclick="showTab('logs')" id="tab-logs" class="px-6 py-3 text-sm font-semibold tab-active">
-                        📜 Live Logs
+                        📜 {{ t.live_logs }}
                     </button>
                     <button onclick="showTab('history')" id="tab-history" class="px-6 py-3 text-sm font-semibold text-gray-400 hover:text-white">
-                        📊 History
+                        📊 {{ t.history }}
                     </button>
                 </div>
 
@@ -97,7 +100,7 @@
                          hx-trigger="every 1s"
                          hx-target="#log-content"
                          hx-swap="innerHTML">
-                        <div id="log-content">Waiting for logs...</div>
+                        <div id="log-content">{{ t.waiting_logs }}</div>
                     </div>
                 </div>
 
@@ -108,7 +111,7 @@
                          hx-get="/api/history"
                          hx-trigger="load, every 10s"
                          hx-swap="innerHTML">
-                        <div class="text-gray-500 text-center">Loading history...</div>
+                        <div class="text-gray-500 text-center">{{ t.loading_history }}</div>
                     </div>
                 </div>
             </div>
@@ -120,20 +123,31 @@
             <!-- Unified Settings Form -->
             <form hx-post="/save_config_all" hx-target="#save-msg-all">
 
+                <!-- Language Section -->
+                <div class="glass rounded-xl p-4 shadow-xl mb-6">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold">🌐 {{ t.language }}</span>
+                        <select name="language" class="bg-slate-800/50 border border-slate-700 rounded px-3 py-1 text-sm" onchange="this.form.submit()">
+                            <option value="de" {% if lang == 'de' %}selected{% endif %}>🇩🇪 Deutsch</option>
+                            <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Paths Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
-                    <h2 class="text-xl font-semibold mb-4">📁 Pfade</h2>
+                    <h2 class="text-xl font-semibold mb-4">📁 {{ t.paths }}</h2>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Video-Pfade (kommagetrennt)</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.video_paths }}</label>
                             <textarea name="video_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-20" placeholder="/data/movies, /data/tv">{{ config.video_paths|join(', ') }}</textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Prioritäts-Pfade (werden zuerst geladen)</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.priority_paths }}</label>
                             <textarea name="priority_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16" placeholder="/data/tv/Currently Watching">{{ config.priority_paths|join(', ') }}</textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Exclude-Patterns (werden übersprungen)</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.exclude_patterns }}</label>
                             <textarea name="exclude_patterns" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16" placeholder="*/Samples/*, */Extras/*">{{ config.exclude_patterns|join(', ') }}</textarea>
                         </div>
                     </div>
@@ -141,47 +155,47 @@
 
                 <!-- Preload Settings Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
-                    <h2 class="text-xl font-semibold mb-4">⚡ Preload-Einstellungen</h2>
+                    <h2 class="text-xl font-semibold mb-4">⚡ {{ t.preload_settings }}</h2>
                     <div class="space-y-4">
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Head-Preload (MB)</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.head_preload }}</label>
                                 <input type="number" name="preload_head_mb" value="{{ config.preload_head_mb }}" min="1" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
-                                <p class="text-xs text-gray-500 mt-1">Anfang der Datei</p>
+                                <p class="text-xs text-gray-500 mt-1">{{ t.file_start }}</p>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Tail-Preload (MB)</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.tail_preload }}</label>
                                 <input type="number" name="preload_tail_mb" value="{{ config.preload_tail_mb }}" min="1" max="100" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
-                                <p class="text-xs text-gray-500 mt-1">Ende der Datei</p>
+                                <p class="text-xs text-gray-500 mt-1">{{ t.file_end }}</p>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Min. Dateigröße (MB)</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.min_file_size }}</label>
                                 <input type="number" name="min_size_mb" value="{{ config.min_size_mb }}" min="50" max="5000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
-                                <p class="text-xs text-gray-500 mt-1">Kleinere ignorieren</p>
+                                <p class="text-xs text-gray-500 mt-1">{{ t.ignore_smaller }}</p>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Max. Dateien pro Run</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.max_files_per_run }}</label>
                                 <input type="number" name="max_files_per_run" value="{{ config.max_files_per_run }}" min="5" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
                             </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Cache-Threshold (ms)</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.cache_threshold }}</label>
                                 <input type="number" name="cache_threshold_ms" value="{{ config.cache_threshold_ms }}" min="10" max="1000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
-                                <p class="text-xs text-gray-500 mt-1">Schneller = gecacht</p>
+                                <p class="text-xs text-gray-500 mt-1">{{ t.faster_cached }}</p>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Max RAM Usage: <span id="ram-value">{{ config.ram_max_usage_percent }}</span>%</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.max_ram_usage }}: <span id="ram-value">{{ config.ram_max_usage_percent }}</span>%</label>
                                 <input type="range" name="ram_max_usage_percent" min="10" max="95" value="{{ config.ram_max_usage_percent }}" class="w-full accent-blue-500 mt-2" oninput="document.getElementById('ram-value').innerText = this.value">
                             </div>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Video-Erweiterungen</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.video_extensions }}</label>
                             <input type="text" name="video_extensions" value="{{ config.video_extensions|join(', ') }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="mkv, mp4, avi, mov">
                         </div>
                     </div>
@@ -190,7 +204,7 @@
                 <!-- Scheduler Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">⏰ Auto-Scheduler</h2>
+                        <h2 class="text-xl font-semibold">⏰ {{ t.auto_scheduler }}</h2>
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="scheduler_enabled" class="sr-only peer" {% if config.scheduler_enabled %}checked{% endif %}>
                             <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
@@ -198,15 +212,15 @@
                     </div>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Cron-Schedule</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.cron_schedule }}</label>
                             <input type="text" name="cron_schedule" value="{{ config.cron_schedule }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm font-mono" placeholder="0 */2 * * *">
-                            <p class="text-xs text-gray-500 mt-1">Format: min hour day month weekday</p>
+                            <p class="text-xs text-gray-500 mt-1">{{ t.cron_format }}</p>
                         </div>
 
                         <!-- Time Profiles -->
                         <div class="border-t border-slate-700 pt-4">
                             <div class="flex items-center justify-between mb-2">
-                                <label class="text-xs font-bold text-gray-400">🕐 Zeit-Profile (unterschiedliche Größen)</label>
+                                <label class="text-xs font-bold text-gray-400">🕐 {{ t.time_profiles }}</label>
                                 <label class="flex items-center cursor-pointer">
                                     <input type="checkbox" name="use_time_profiles" class="sr-only peer" {% if config.use_time_profiles %}checked{% endif %}>
                                     <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
@@ -214,17 +228,17 @@
                             </div>
                             <div class="grid grid-cols-3 gap-2 text-xs">
                                 <div class="bg-slate-800/50 p-2 rounded">
-                                    <div class="text-gray-400">Tag (6-18h)</div>
+                                    <div class="text-gray-400">{{ t.day }}</div>
                                     <input type="number" name="profile_day_mb" value="{{ config.time_profiles[0].preload_head_mb if config.time_profiles|length > 0 else 30 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
                                     <div class="text-gray-500">MB</div>
                                 </div>
                                 <div class="bg-slate-800/50 p-2 rounded">
-                                    <div class="text-gray-400">Abend (18-23h)</div>
+                                    <div class="text-gray-400">{{ t.evening }}</div>
                                     <input type="number" name="profile_evening_mb" value="{{ config.time_profiles[1].preload_head_mb if config.time_profiles|length > 1 else 100 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
                                     <div class="text-gray-500">MB</div>
                                 </div>
                                 <div class="bg-slate-800/50 p-2 rounded">
-                                    <div class="text-gray-400">Nacht (23-6h)</div>
+                                    <div class="text-gray-400">{{ t.night }}</div>
                                     <input type="number" name="profile_night_mb" value="{{ config.time_profiles[2].preload_head_mb if config.time_profiles|length > 2 else 60 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
                                     <div class="text-gray-500">MB</div>
                                 </div>
@@ -236,7 +250,7 @@
                 <!-- Tautulli Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">📊 Tautulli</h2>
+                        <h2 class="text-xl font-semibold">📊 {{ t.tautulli_integration }}</h2>
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="tautulli_enabled" class="sr-only peer" {% if config.tautulli_enabled %}checked{% endif %}>
                             <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
@@ -244,24 +258,24 @@
                     </div>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Tautulli URL</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.tautulli_url }}</label>
                             <input type="url" name="tautulli_url" value="{{ config.tautulli_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://tautulli:8181">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">API-Key</label>
-                            <input type="password" name="tautulli_api_key" value="{{ config.tautulli_api_key }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="API Key">
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.api_key }}</label>
+                            <input type="password" name="tautulli_api_key" value="{{ config.tautulli_api_key }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="{{ t.your_api_key }}">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Top-Filme Anzahl</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.top_movies }}</label>
                                 <input type="number" name="tautulli_top_movies_count" value="{{ config.tautulli_top_movies_count }}" min="1" max="50" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-400 mb-1">Nächste Folgen Anzahl</label>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.next_episodes }}</label>
                                 <input type="number" name="tautulli_next_episodes_count" value="{{ config.tautulli_next_episodes_count }}" min="1" max="20" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
                             </div>
                         </div>
-                        <button type="button" hx-get="/api/test-tautulli" hx-target="#tautulli-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 Verbindung testen</button>
+                        <button type="button" hx-get="/api/test-tautulli" hx-target="#tautulli-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 {{ t.test_connection }}</button>
                         <span id="tautulli-test" class="text-xs ml-2"></span>
                     </div>
                 </div>
@@ -269,7 +283,7 @@
                 <!-- Plex Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-xl font-semibold">🎬 Plex</h2>
+                        <h2 class="text-xl font-semibold">🎬 {{ t.plex_integration }}</h2>
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="plex_enabled" class="sr-only peer" {% if config.plex_enabled %}checked{% endif %}>
                             <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
@@ -277,14 +291,14 @@
                     </div>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">Plex URL</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.plex_url }}</label>
                             <input type="url" name="plex_url" value="{{ config.plex_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://plex:32400">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-gray-400 mb-1">X-Plex-Token</label>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.plex_token }}</label>
                             <input type="password" name="plex_token" value="{{ config.plex_token }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="Token">
                         </div>
-                        <button type="button" hx-get="/api/test-plex" hx-target="#plex-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 Verbindung testen</button>
+                        <button type="button" hx-get="/api/test-plex" hx-target="#plex-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 {{ t.test_connection }}</button>
                         <span id="plex-test" class="text-xs ml-2"></span>
                     </div>
                 </div>
@@ -294,7 +308,7 @@
                     <div class="flex justify-between items-center">
                         <div id="save-msg-all" class="text-sm"></div>
                         <button type="submit" class="bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 px-6 py-3 rounded-lg font-bold shadow-lg transition-all transform active:scale-95">
-                            💾 Alle Einstellungen speichern
+                            💾 {{ t.save_all }}
                         </button>
                     </div>
                 </div>
@@ -302,12 +316,12 @@
 
             <!-- Quick Info -->
             <div class="glass rounded-xl p-4 shadow-xl">
-                <h3 class="text-sm font-semibold text-gray-400 mb-2">ℹ️ Quick Info</h3>
+                <h3 class="text-sm font-semibold text-gray-400 mb-2">ℹ️ {{ t.quick_info }}</h3>
                 <ul class="text-xs text-gray-500 space-y-1">
-                    <li>• Pfade gemappt auf <code class="text-blue-400">/data/...</code></li>
-                    <li>• Plex Webhook: <code class="text-blue-400">/api/webhook/plex</code></li>
-                    <li>• Config gespeichert in <code class="text-blue-400">/config/</code></li>
-                    <li>• Tautulli lädt meistgesehene Filme + nächste Folgen</li>
+                    <li>• {{ t.info_paths }} <code class="text-blue-400">/data/...</code></li>
+                    <li>• {{ t.info_webhook }} <code class="text-blue-400">/api/webhook/plex</code></li>
+                    <li>• {{ t.info_config }} <code class="text-blue-400">/config/</code></li>
+                    <li>• {{ t.info_tautulli }}</li>
                 </ul>
             </div>
         </div>
@@ -332,7 +346,7 @@
                 // Update stats
                 if(data.last_run) {
                     document.getElementById('stat-preloaded').innerText = data.last_run.preloaded;
-                    document.getElementById('stat-skipped').innerText = data.last_run.skipped;
+                    document.getElementById('stat-cached').innerText = data.last_run.total_cached;
                     document.getElementById('stat-duration').innerText = data.last_run.duration + 's';
                     document.getElementById('stat-lastrun').innerText = data.last_run.last_run;
                 }

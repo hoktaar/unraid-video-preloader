@@ -20,9 +20,144 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # --- CONSTANTS ---
+VERSION = "1.0.0"
 CONFIG_FILE = "/config/config.json"
 LOG_FILE = "/config/preloader.log"
 HISTORY_FILE = "/config/history.json"
+
+# --- TRANSLATIONS ---
+TRANSLATIONS = {
+    "en": {
+        "title": "Video Preloader",
+        "subtitle": "Smart caching for Plex & Jellyfin with Tautulli integration",
+        "status": "Status",
+        "loaded": "Loaded",
+        "total_cached": "Total Cached",
+        "duration": "Duration",
+        "last_run": "Last Run",
+        "run_now": "Run Preloader Now",
+        "running": "Running...",
+        "history": "History",
+        "live_logs": "Live Logs",
+        "paths": "Paths",
+        "video_paths": "Video Paths (comma-separated)",
+        "priority_paths": "Priority Paths (loaded first)",
+        "exclude_patterns": "Exclude Patterns (will be skipped)",
+        "preload_settings": "Preload Settings",
+        "head_preload": "Head Preload (MB)",
+        "tail_preload": "Tail Preload (MB)",
+        "file_start": "File start",
+        "file_end": "File end",
+        "min_file_size": "Min. File Size (MB)",
+        "ignore_smaller": "Ignore smaller",
+        "max_files_per_run": "Max. Files per Run",
+        "cache_threshold": "Cache Threshold (ms)",
+        "faster_cached": "Faster = cached",
+        "max_ram_usage": "Max RAM Usage",
+        "video_extensions": "Video Extensions",
+        "auto_scheduler": "Auto-Scheduler",
+        "cron_schedule": "Cron Schedule",
+        "cron_format": "Format: min hour day month weekday",
+        "time_profiles": "Time Profiles (different sizes)",
+        "day": "Day (6-18h)",
+        "evening": "Evening (18-23h)",
+        "night": "Night (23-6h)",
+        "test_connection": "Test connection",
+        "save_all": "Save all settings",
+        "quick_info": "Quick Info",
+        "paths_mapped": "Paths mapped to",
+        "plex_webhook": "Plex Webhook",
+        "config_saved_in": "Config saved in",
+        "tautulli_loads": "Tautulli loads most-watched movies + next episodes",
+        "ram_usage": "RAM Usage",
+        "next": "Next",
+        "scheduler_active": "Scheduler active",
+        "no_history": "No history yet",
+        "loading_history": "Loading history...",
+        "waiting_logs": "Waiting for logs...",
+        "api_key": "API Key",
+        "top_movies_count": "Top Movies Count",
+        "next_episodes_count": "Next Episodes Count",
+        "language": "Language",
+        "tautulli_integration": "Tautulli Integration",
+        "tautulli_url": "Tautulli URL",
+        "your_api_key": "Your API Key",
+        "top_movies": "Top Movies",
+        "next_episodes": "Next Episodes",
+        "plex_integration": "Plex Integration",
+        "plex_url": "Plex URL",
+        "plex_token": "X-Plex-Token",
+        "info_paths": "Paths mapped to",
+        "info_webhook": "Plex Webhook:",
+        "info_config": "Config saved in",
+        "info_tautulli": "Tautulli loads most-watched movies + next episodes",
+    },
+    "de": {
+        "title": "Video Preloader",
+        "subtitle": "Intelligentes Caching für Plex & Jellyfin mit Tautulli-Integration",
+        "status": "Status",
+        "loaded": "Geladen",
+        "total_cached": "Gesamt gecacht",
+        "duration": "Dauer",
+        "last_run": "Letzter Lauf",
+        "run_now": "Preloader jetzt starten",
+        "running": "Läuft...",
+        "history": "Verlauf",
+        "live_logs": "Live-Logs",
+        "paths": "Pfade",
+        "video_paths": "Video-Pfade (kommagetrennt)",
+        "priority_paths": "Prioritäts-Pfade (werden zuerst geladen)",
+        "exclude_patterns": "Exclude-Patterns (werden übersprungen)",
+        "preload_settings": "Preload-Einstellungen",
+        "head_preload": "Head-Preload (MB)",
+        "tail_preload": "Tail-Preload (MB)",
+        "file_start": "Dateianfang",
+        "file_end": "Dateiende",
+        "min_file_size": "Min. Dateigröße (MB)",
+        "ignore_smaller": "Kleinere ignorieren",
+        "max_files_per_run": "Max. Dateien pro Lauf",
+        "cache_threshold": "Cache-Schwelle (ms)",
+        "faster_cached": "Schneller = gecacht",
+        "max_ram_usage": "Max RAM-Nutzung",
+        "video_extensions": "Video-Erweiterungen",
+        "auto_scheduler": "Auto-Scheduler",
+        "cron_schedule": "Cron-Schedule",
+        "cron_format": "Format: Min Std Tag Monat Wochentag",
+        "time_profiles": "Zeit-Profile (unterschiedliche Größen)",
+        "day": "Tag (6-18h)",
+        "evening": "Abend (18-23h)",
+        "night": "Nacht (23-6h)",
+        "test_connection": "Verbindung testen",
+        "save_all": "Alle Einstellungen speichern",
+        "quick_info": "Kurzinfo",
+        "paths_mapped": "Pfade gemappt auf",
+        "plex_webhook": "Plex Webhook",
+        "config_saved_in": "Config gespeichert in",
+        "tautulli_loads": "Tautulli lädt meistgesehene Filme + nächste Folgen",
+        "ram_usage": "RAM-Nutzung",
+        "next": "Nächster",
+        "scheduler_active": "Scheduler aktiv",
+        "no_history": "Noch kein Verlauf",
+        "loading_history": "Lade Verlauf...",
+        "waiting_logs": "Warte auf Logs...",
+        "api_key": "API-Key",
+        "top_movies_count": "Top-Filme Anzahl",
+        "next_episodes_count": "Nächste Folgen Anzahl",
+        "language": "Sprache",
+        "tautulli_integration": "Tautulli-Integration",
+        "tautulli_url": "Tautulli URL",
+        "your_api_key": "Dein API-Key",
+        "top_movies": "Top-Filme",
+        "next_episodes": "Nächste Folgen",
+        "plex_integration": "Plex-Integration",
+        "plex_url": "Plex URL",
+        "plex_token": "X-Plex-Token",
+        "info_paths": "Pfade gemappt auf",
+        "info_webhook": "Plex Webhook:",
+        "info_config": "Config gespeichert in",
+        "info_tautulli": "Tautulli lädt meistgesehene Filme + nächste Folgen",
+    }
+}
 
 # --- LOGGING SETUP ---
 def setup_logging() -> logging.Logger:
@@ -105,6 +240,9 @@ class Config(BaseModel):
     tautulli_top_movies_count: int = 10  # Top X meistgesehene Filme
     tautulli_next_episodes_count: int = 5  # Nächste X Folgen pro Serie
 
+    # UI-Einstellungen
+    language: str = "de"  # "de" oder "en"
+
     @classmethod
     def load(cls) -> "Config":
         """Lädt die Konfiguration aus der JSON-Datei."""
@@ -162,6 +300,7 @@ class AppState:
         self.last_run_stats: dict = {
             "preloaded": 0,
             "skipped": 0,
+            "total_cached": 0,
             "duration": 0,
             "last_run": "Never"
         }
@@ -650,9 +789,11 @@ async def run_preload(source: str = "manual"):
 
         # Stats aktualisieren
         duration_secs = int(time.time() - stats["start_time"])
+        total_cached = stats["preloaded"] + stats["skipped"]
         state.last_run_stats = {
             "preloaded": stats["preloaded"],
             "skipped": stats["skipped"],
+            "total_cached": total_cached,
             "duration": duration_secs,
             "last_run": time.strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -750,9 +891,18 @@ app = FastAPI(title="Unraid Video Preloader", lifespan=lifespan)
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Rendert die Hauptseite mit Konfiguration und Status."""
+    lang = config.language if config.language in TRANSLATIONS else "en"
+    t = TRANSLATIONS[lang]
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "config": config, "state": state}
+        {
+            "request": request,
+            "config": config,
+            "state": state,
+            "version": VERSION,
+            "t": t,
+            "lang": lang
+        }
     )
 
 
@@ -916,7 +1066,9 @@ async def save_config_all(
     # Plex
     plex_enabled: bool = Form(False),
     plex_url: str = Form(""),
-    plex_token: str = Form("")
+    plex_token: str = Form(""),
+    # UI
+    language: str = Form("de")
 ):
     """Speichert alle Konfigurationseinstellungen aus dem Webformular."""
 
@@ -959,6 +1111,9 @@ async def save_config_all(
     config.plex_url = plex_url
     config.plex_token = plex_token
 
+    # UI
+    config.language = language
+
     config.save()
 
     # Scheduler neu einrichten wenn sich was geändert hat
@@ -966,7 +1121,8 @@ async def save_config_all(
         setup_scheduler()
 
     logger.info(f"All config saved: {len(config.video_paths)} paths, scheduler={'on' if scheduler_enabled else 'off'}")
-    return HTMLResponse('<span class="text-green-500">✓ Alle Einstellungen gespeichert!</span>')
+    msg = "✓ Settings saved!" if language == "en" else "✓ Einstellungen gespeichert!"
+    return HTMLResponse(f'<span class="text-green-500">{msg}</span>')
 
 
 @app.get("/api/test-tautulli")
