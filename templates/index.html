@@ -301,6 +301,12 @@
                                 <input type="number" name="live_episodes_to_preload" value="{{ config.live_episodes_to_preload }}" min="1" max="10" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
                             </div>
                         </div>
+                        <!-- Path Mapping -->
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">🔄 {{ t.path_mappings }}</label>
+                            <textarea name="path_mappings" rows="3" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm font-mono" placeholder="/media/tv:/data/tv&#10;/media/movies:/data/movies">{{ config.path_mappings | join('\n') }}</textarea>
+                            <p class="text-xs text-gray-500 mt-1">{{ t.path_mappings_hint }}</p>
+                        </div>
                     </div>
                 </div>
 

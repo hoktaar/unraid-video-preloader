@@ -97,6 +97,9 @@ TRANSLATIONS = {
         "live_check_interval": "Check Interval (seconds)",
         "live_episodes_count": "Episodes to preload",
         "live_monitoring_desc": "Automatically caches next episodes when someone is watching a series",
+        "path_mappings": "Path Mappings",
+        "path_mappings_desc": "Plex to Container (e.g. /media:/data)",
+        "path_mappings_hint": "Format: plex_path:container_path, one mapping per line",
     },
     "de": {
         "title": "Video Preloader",
@@ -167,6 +170,9 @@ TRANSLATIONS = {
         "live_check_interval": "Prüf-Intervall (Sekunden)",
         "live_episodes_count": "Episoden zum Vorladen",
         "live_monitoring_desc": "Cached automatisch nächste Episoden wenn jemand eine Serie schaut",
+        "path_mappings": "Pfad-Mappings",
+        "path_mappings_desc": "Plex zu Container (z.B. /media:/data)",
+        "path_mappings_hint": "Format: plex_pfad:container_pfad, ein Mapping pro Zeile",
     }
 }
 
@@ -256,8 +262,33 @@ class Config(BaseModel):
     live_check_interval_seconds: int = 60  # Wie oft prüfen
     live_episodes_to_preload: int = 3  # Wie viele nächste Episoden cachen
 
+    # Pfad-Mapping: Plex-Pfade zu Container-Pfaden
+    # Format: "plex_pfad:container_pfad" z.B. "/media:/data"
+    path_mappings: List[str] = []
+
     # UI-Einstellungen
     language: str = "de"  # "de" oder "en"
+
+    def map_path(self, plex_path: str) -> str:
+        """
+        Konvertiert einen Plex-Pfad zu einem Container-Pfad.
+
+        Args:
+            plex_path: Der Pfad wie Plex/Tautulli ihn sieht
+
+        Returns:
+            Der gemappte Container-Pfad
+        """
+        if not plex_path:
+            return plex_path
+
+        for mapping in self.path_mappings:
+            if ':' in mapping:
+                plex_prefix, container_prefix = mapping.split(':', 1)
+                if plex_path.startswith(plex_prefix):
+                    return plex_path.replace(plex_prefix, container_prefix, 1)
+
+        return plex_path
 
     @classmethod
     def load(cls) -> "Config":
@@ -566,25 +597,28 @@ async def _find_media_file(client: httpx.AsyncClient, base_url: str, rating_key:
                         break
 
             if file_path:
-                # Konvertiere Plex-Pfad zu Container-Pfad
-                # z.B. /media/tv/... → /data/tv/...
                 original_path = file_path
 
-                # Prüfe ob der Pfad existiert
+                # 1. Versuche konfiguriertes Pfad-Mapping
+                mapped_path = config.map_path(file_path)
+                if mapped_path != file_path and os.path.exists(mapped_path):
+                    logger.debug(f"Pfad gemappt (config): {original_path} -> {mapped_path}")
+                    return mapped_path
+
+                # 2. Prüfe ob der Original-Pfad existiert
                 if os.path.exists(file_path):
                     return file_path
 
-                # Versuche Pfad-Mapping
+                # 3. Versuche automatisches Pfad-Mapping über video_paths
                 for video_path in config.video_paths:
-                    # Extrahiere den relativen Teil des Pfads
                     path_parts = file_path.replace('\\', '/').split('/')
                     for i in range(len(path_parts)):
                         test_path = os.path.join(video_path, *path_parts[i:])
                         if os.path.exists(test_path):
-                            logger.debug(f"Pfad gemappt: {original_path} -> {test_path}")
+                            logger.debug(f"Pfad gemappt (auto): {original_path} -> {test_path}")
                             return test_path
 
-                logger.debug(f"Pfad nicht gefunden: {file_path}")
+                logger.warning(f"Pfad nicht gefunden: {file_path} (Tipp: Pfad-Mapping in Einstellungen konfigurieren)")
 
     except Exception as e:
         logger.debug(f"Could not find file for rating_key {rating_key}: {e}")
@@ -774,26 +808,30 @@ async def preload_next_episodes_for_session(session: Dict[str, Any]) -> int:
 
             preload_size = config.get_current_preload_size()
 
-            for filepath in next_eps:
-                if os.path.exists(filepath):
-                    filename = os.path.basename(filepath)
-
-                    # Prüfe ob schon gecached
-                    duration = read_file_chunk(filepath, 1)  # Quick check
-                    if duration < config.cache_threshold_ms:
-                        logger.debug(f"Already cached: {filename}")
-                        continue
-
-                    # Preload
-                    logger.info(f"Live-Preload: {filename} (User: {session['user']})")
-                    read_file_chunk(filepath, preload_size)
-                    read_file_chunk(filepath, config.preload_tail_mb, offset_from_end=True)
-                    loaded_count += 1
-
             if not next_eps:
                 logger.info(f"Live-Monitoring: Keine nächsten Episoden gefunden für '{session['show_title']}'")
             else:
                 logger.info(f"Live-Monitoring: {len(next_eps)} Episoden gefunden für '{session['show_title']}'")
+
+                for filepath in next_eps:
+                    filename = os.path.basename(filepath)
+
+                    if not os.path.exists(filepath):
+                        logger.warning(f"Live-Monitoring: Datei nicht gefunden: {filepath}")
+                        continue
+
+                    # Prüfe ob schon gecached
+                    duration = read_file_chunk(filepath, 1)  # Quick check
+                    if duration < config.cache_threshold_ms:
+                        logger.info(f"⚡ Live-Cache: {filename} (bereits im Cache)")
+                        continue
+
+                    # Preload - höchste Priorität!
+                    logger.info(f"📦 Live-Preload: {filename} (User: {session['user']})")
+                    read_file_chunk(filepath, preload_size)
+                    read_file_chunk(filepath, config.preload_tail_mb, offset_from_end=True)
+                    loaded_count += 1
+                    logger.info(f"✅ Live-Preload fertig: {filename}")
 
         except Exception as e:
             logger.warning(f"Live-Monitoring Error: {e}")
@@ -1416,6 +1454,7 @@ async def save_config_all(
     live_monitoring_enabled: bool = Form(False),
     live_check_interval_seconds: int = Form(60),
     live_episodes_to_preload: int = Form(3),
+    path_mappings: str = Form(""),
     # Plex
     plex_enabled: bool = Form(False),
     plex_url: str = Form(""),
@@ -1464,6 +1503,8 @@ async def save_config_all(
     config.live_monitoring_enabled = live_monitoring_enabled
     config.live_check_interval_seconds = live_check_interval_seconds
     config.live_episodes_to_preload = live_episodes_to_preload
+    # Pfad-Mappings (Zeilen-separiert)
+    config.path_mappings = [p.strip() for p in path_mappings.split('\n') if p.strip() and ':' in p]
 
     # Plex
     config.plex_enabled = plex_enabled
