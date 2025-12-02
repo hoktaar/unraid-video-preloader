@@ -27,6 +27,7 @@ Unraid Video Preloader is a Docker application that intelligently preloads video
 
 - **Smart Preloading** - Loads beginning and end of video files into cache
 - **Tautulli Integration** - Preloads most-watched movies and next episodes of currently watching series
+- **Live Monitoring** - Automatically caches next episodes when someone is watching a series
 - **Plex Integration** - Preloads "On Deck" / Continue Watching content
 - **Auto-Scheduler** - Cron-based automatic preloading
 - **Time Profiles** - Different preload sizes for day/evening/night
@@ -73,7 +74,17 @@ All settings are available in the web interface:
 | **Max RAM Usage** | Stop preloading above this percentage |
 | **Scheduler** | Cron expression for automatic runs |
 | **Tautulli** | URL and API key for integration |
+| **Live Monitoring** | Auto-cache next episodes during playback |
 | **Plex** | URL and token for On Deck feature |
+
+### 📡 Live Monitoring
+
+When enabled, the preloader monitors active Tautulli streams every 60 seconds. If someone is watching a series episode, the next 3 episodes are automatically cached. This ensures seamless playback when binge-watching!
+
+| Setting | Description |
+|---------|-------------|
+| **Check Interval** | How often to check for active streams (default: 60s) |
+| **Episodes to Preload** | Number of next episodes to cache (default: 3) |
 
 ### 🔌 API Endpoints
 
@@ -109,6 +120,7 @@ Unraid Video Preloader ist eine Docker-Anwendung, die Video-Dateien intelligent 
 
 - **Intelligentes Preloading** - Lädt Anfang und Ende von Video-Dateien in den Cache
 - **Tautulli-Integration** - Preloadet meistgesehene Filme und nächste Folgen aktueller Serien
+- **Live-Monitoring** - Cached automatisch nächste Episoden wenn jemand eine Serie schaut
 - **Plex-Integration** - Preloadet "On Deck" / Weiterschauen-Inhalte
 - **Auto-Scheduler** - Cron-basiertes automatisches Preloading
 - **Zeit-Profile** - Unterschiedliche Preload-Größen für Tag/Abend/Nacht
@@ -155,7 +167,17 @@ Alle Einstellungen sind im Web-Interface verfügbar:
 | **Max RAM-Nutzung** | Preloading stoppen über diesem Prozentsatz |
 | **Scheduler** | Cron-Ausdruck für automatische Durchläufe |
 | **Tautulli** | URL und API-Key für Integration |
+| **Live-Monitoring** | Automatisches Caching während Wiedergabe |
 | **Plex** | URL und Token für On Deck Feature |
+
+### 📡 Live-Monitoring
+
+Wenn aktiviert, prüft der Preloader alle 60 Sekunden aktive Tautulli-Streams. Wenn jemand eine Serien-Episode schaut, werden automatisch die nächsten 3 Episoden gecacht. Das sorgt für nahtloses Binge-Watching!
+
+| Einstellung | Beschreibung |
+|-------------|--------------|
+| **Prüf-Intervall** | Wie oft nach aktiven Streams geprüft wird (Standard: 60s) |
+| **Episoden zum Vorladen** | Anzahl der nächsten Episoden zum Cachen (Standard: 3) |
 
 ### 🔌 API-Endpunkte
 
