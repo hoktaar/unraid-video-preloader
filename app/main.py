@@ -673,13 +673,16 @@ async def _find_next_episodes(
             return episodes
 
         seasons = data.get("response", {}).get("data", {}).get("children_list", [])
-        logger.debug(f"Gefundene Staffeln: {len(seasons)}")
+
+        # WICHTIG: Sortiere Staffeln nach Nummer!
+        seasons_sorted = sorted(seasons, key=lambda x: int(x.get("media_index", 0) or 0))
+        logger.debug(f"Gefundene Staffeln: {len(seasons_sorted)} (sortiert)")
 
         # Konvertiere last_season und last_episode zu int (falls String)
         last_season = int(last_season) if last_season else 0
         last_episode = int(last_episode) if last_episode else 0
 
-        for season in seasons:
+        for season in seasons_sorted:
             # Konvertiere zu int (API kann Strings zurückgeben)
             season_num = int(season.get("media_index", 0) or 0)
 
@@ -703,9 +706,12 @@ async def _find_next_episodes(
 
             ep_data = season_resp.json()
             eps = ep_data.get("response", {}).get("data", {}).get("children_list", [])
-            logger.debug(f"Staffel {season_num}: {len(eps)} Episoden")
 
-            for ep in eps:
+            # WICHTIG: Sortiere Episoden nach Nummer!
+            eps_sorted = sorted(eps, key=lambda x: int(x.get("media_index", 0) or 0))
+            logger.debug(f"Staffel {season_num}: {len(eps_sorted)} Episoden (sortiert)")
+
+            for ep in eps_sorted:
                 # Konvertiere zu int
                 ep_num = int(ep.get("media_index", 0) or 0)
 
