@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import asyncio
 import fnmatch
 import logging
 import threading
@@ -91,6 +92,11 @@ TRANSLATIONS = {
         "info_webhook": "Plex Webhook:",
         "info_config": "Config saved in",
         "info_tautulli": "Tautulli loads most-watched movies + next episodes",
+        "live_monitoring": "Live Monitoring",
+        "live_monitoring_enabled": "Enable Live Monitoring",
+        "live_check_interval": "Check Interval (seconds)",
+        "live_episodes_count": "Episodes to preload",
+        "live_monitoring_desc": "Automatically caches next episodes when someone is watching a series",
     },
     "de": {
         "title": "Video Preloader",
@@ -156,6 +162,11 @@ TRANSLATIONS = {
         "info_webhook": "Plex Webhook:",
         "info_config": "Config gespeichert in",
         "info_tautulli": "Tautulli lädt meistgesehene Filme + nächste Folgen",
+        "live_monitoring": "Live-Monitoring",
+        "live_monitoring_enabled": "Live-Monitoring aktivieren",
+        "live_check_interval": "Prüf-Intervall (Sekunden)",
+        "live_episodes_count": "Episoden zum Vorladen",
+        "live_monitoring_desc": "Cached automatisch nächste Episoden wenn jemand eine Serie schaut",
     }
 }
 
@@ -239,6 +250,11 @@ class Config(BaseModel):
     tautulli_enabled: bool = False
     tautulli_top_movies_count: int = 10  # Top X meistgesehene Filme
     tautulli_next_episodes_count: int = 5  # Nächste X Folgen pro Serie
+
+    # Live-Monitoring: Echtzeit-Caching wenn jemand eine Serie schaut
+    live_monitoring_enabled: bool = False
+    live_check_interval_seconds: int = 60  # Wie oft prüfen
+    live_episodes_to_preload: int = 3  # Wie viele nächste Episoden cachen
 
     # UI-Einstellungen
     language: str = "de"  # "de" oder "en"
@@ -601,6 +617,140 @@ async def _find_next_episodes(
     return episodes
 
 
+# --- LIVE ACTIVITY MONITORING ---
+
+async def fetch_current_activity() -> List[Dict[str, Any]]:
+    """
+    Holt aktuell laufende Wiedergaben von Tautulli.
+
+    Returns:
+        Liste von aktiven Serien-Wiedergaben mit Show-Info.
+    """
+    sessions = []
+
+    if not config.tautulli_enabled or not config.tautulli_url or not config.tautulli_api_key:
+        return sessions
+
+    base_url = config.tautulli_url.rstrip('/')
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.get(
+                f"{base_url}/api/v2",
+                params={
+                    "apikey": config.tautulli_api_key,
+                    "cmd": "get_activity"
+                }
+            )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("response", {}).get("result") == "success":
+                    activity = data.get("response", {}).get("data", {})
+                    for session in activity.get("sessions", []):
+                        # Nur Serien-Episoden sind interessant
+                        if session.get("media_type") == "episode":
+                            sessions.append({
+                                "show_key": session.get("grandparent_rating_key"),
+                                "show_title": session.get("grandparent_title"),
+                                "season": int(session.get("parent_media_index", 1)),
+                                "episode": int(session.get("media_index", 1)),
+                                "user": session.get("friendly_name", "Unknown")
+                            })
+
+                    if sessions:
+                        logger.info(f"Live Activity: {len(sessions)} Serien-Streams aktiv")
+
+        except Exception as e:
+            logger.debug(f"Activity fetch error: {e}")
+
+    return sessions
+
+
+async def preload_next_episodes_for_session(session: Dict[str, Any]) -> int:
+    """
+    Lädt die nächsten Episoden einer laufenden Serie in den Cache.
+
+    Args:
+        session: Session-Info mit show_key, season, episode.
+
+    Returns:
+        Anzahl der geladenen Episoden.
+    """
+    if not config.tautulli_url or not config.tautulli_api_key:
+        return 0
+
+    base_url = config.tautulli_url.rstrip('/')
+    loaded_count = 0
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            next_eps = await _find_next_episodes(
+                client,
+                base_url,
+                session["show_key"],
+                session["season"],
+                session["episode"]
+            )
+
+            # Limitiere auf konfigurierte Anzahl
+            next_eps = next_eps[:config.live_episodes_to_preload]
+
+            preload_size = config.get_current_preload_size()
+
+            for filepath in next_eps:
+                if os.path.exists(filepath):
+                    filename = os.path.basename(filepath)
+
+                    # Prüfe ob schon gecached
+                    duration = read_file_chunk(filepath, 1)  # Quick check
+                    if duration < config.cache_threshold_ms:
+                        logger.debug(f"Already cached: {filename}")
+                        continue
+
+                    # Preload
+                    logger.info(f"Live-Preload: {filename} (User: {session['user']})")
+                    read_file_chunk(filepath, preload_size)
+                    read_file_chunk(filepath, config.preload_tail_mb, offset_from_end=True)
+                    loaded_count += 1
+
+        except Exception as e:
+            logger.debug(f"Error preloading next episodes: {e}")
+
+    return loaded_count
+
+
+async def live_monitoring_task():
+    """
+    Hintergrund-Task der regelmäßig aktive Streams prüft
+    und nächste Episoden preloaded.
+    """
+    while True:
+        try:
+            if config.live_monitoring_enabled and config.tautulli_enabled:
+                sessions = await fetch_current_activity()
+
+                for session in sessions:
+                    # Prüfe RAM vor jedem Preload
+                    if psutil.virtual_memory().percent > config.ram_max_usage_percent:
+                        logger.warning("Live-Monitoring: RAM-Limit erreicht, pausiere")
+                        break
+
+                    loaded = await preload_next_episodes_for_session(session)
+                    if loaded > 0:
+                        logger.info(
+                            f"Live-Preload für '{session['show_title']}' "
+                            f"S{session['season']:02d}E{session['episode']:02d}: "
+                            f"{loaded} Episoden gecached"
+                        )
+
+        except Exception as e:
+            logger.debug(f"Live monitoring error: {e}")
+
+        # Warte bis zum nächsten Check
+        await asyncio.sleep(config.live_check_interval_seconds)
+
+
 # --- PLEX API CLIENT ---
 
 async def fetch_plex_on_deck() -> List[str]:
@@ -865,9 +1015,15 @@ def setup_scheduler():
 
 # --- APP LIFECYCLE ---
 
+# Globaler Task-Handle für Live-Monitoring
+_live_monitoring_task_handle: Optional[asyncio.Task] = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle-Manager für FastAPI App."""
+    global _live_monitoring_task_handle
+
     # Startup
     logger.info("Video Preloader starting...")
     setup_scheduler()
@@ -875,10 +1031,25 @@ async def lifespan(app: FastAPI):
         scheduler.start()
     logger.info("Scheduler started")
 
+    # Live-Monitoring Task starten
+    if config.live_monitoring_enabled:
+        _live_monitoring_task_handle = asyncio.create_task(live_monitoring_task())
+        logger.info(f"Live-Monitoring gestartet (Intervall: {config.live_check_interval_seconds}s)")
+
     yield
 
     # Shutdown
-    logger.info("Shutting down scheduler...")
+    logger.info("Shutting down...")
+
+    # Live-Monitoring stoppen
+    if _live_monitoring_task_handle and not _live_monitoring_task_handle.done():
+        _live_monitoring_task_handle.cancel()
+        try:
+            await _live_monitoring_task_handle
+        except asyncio.CancelledError:
+            pass
+        logger.info("Live-Monitoring gestoppt")
+
     scheduler.shutdown()
 
 
@@ -1063,6 +1234,10 @@ async def save_config_all(
     tautulli_api_key: str = Form(""),
     tautulli_top_movies_count: int = Form(10),
     tautulli_next_episodes_count: int = Form(5),
+    # Live-Monitoring
+    live_monitoring_enabled: bool = Form(False),
+    live_check_interval_seconds: int = Form(60),
+    live_episodes_to_preload: int = Form(3),
     # Plex
     plex_enabled: bool = Form(False),
     plex_url: str = Form(""),
@@ -1106,6 +1281,12 @@ async def save_config_all(
     config.tautulli_top_movies_count = tautulli_top_movies_count
     config.tautulli_next_episodes_count = tautulli_next_episodes_count
 
+    # Live-Monitoring
+    old_live_monitoring = config.live_monitoring_enabled
+    config.live_monitoring_enabled = live_monitoring_enabled
+    config.live_check_interval_seconds = live_check_interval_seconds
+    config.live_episodes_to_preload = live_episodes_to_preload
+
     # Plex
     config.plex_enabled = plex_enabled
     config.plex_url = plex_url
@@ -1120,7 +1301,18 @@ async def save_config_all(
     if old_scheduler_state != scheduler_enabled or scheduler_enabled:
         setup_scheduler()
 
-    logger.info(f"All config saved: {len(config.video_paths)} paths, scheduler={'on' if scheduler_enabled else 'off'}")
+    # Live-Monitoring Task neu starten wenn nötig
+    global _live_monitoring_task_handle
+    if old_live_monitoring != live_monitoring_enabled:
+        if _live_monitoring_task_handle and not _live_monitoring_task_handle.done():
+            _live_monitoring_task_handle.cancel()
+        if live_monitoring_enabled and tautulli_enabled:
+            _live_monitoring_task_handle = asyncio.create_task(live_monitoring_task())
+            logger.info(f"Live-Monitoring gestartet (Intervall: {live_check_interval_seconds}s)")
+        else:
+            logger.info("Live-Monitoring gestoppt")
+
+    logger.info(f"All config saved: {len(config.video_paths)} paths, scheduler={'on' if scheduler_enabled else 'off'}, live-monitoring={'on' if live_monitoring_enabled else 'off'}")
     msg = "✓ Settings saved!" if language == "en" else "✓ Einstellungen gespeichert!"
     return HTMLResponse(f'<span class="text-green-500">{msg}</span>')
 

@@ -280,6 +280,30 @@
                     </div>
                 </div>
 
+                <!-- Live Monitoring Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">📡 {{ t.live_monitoring }}</h2>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" name="live_monitoring_enabled" class="sr-only peer" {% if config.live_monitoring_enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-4">{{ t.live_monitoring_desc }}</p>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.live_check_interval }}</label>
+                                <input type="number" name="live_check_interval_seconds" value="{{ config.live_check_interval_seconds }}" min="10" max="300" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.live_episodes_count }}</label>
+                                <input type="number" name="live_episodes_to_preload" value="{{ config.live_episodes_to_preload }}" min="1" max="10" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Plex Section -->
                 <div class="glass rounded-xl p-6 shadow-xl mb-6">
                     <div class="flex items-center justify-between mb-4">
