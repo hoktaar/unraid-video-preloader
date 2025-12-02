@@ -52,3 +52,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Update Docker Hub Description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/unraid-video-preloader
+          short-description: "🎬 Smart video preloading for Plex & Jellyfin - Eliminates buffering by caching videos in RAM"
+          readme-filepath: ./README.md
