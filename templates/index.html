@@ -95,9 +95,9 @@
                 <!-- Logs Tab -->
                 <div id="content-logs" class="p-6 h-80">
                     <div id="log-container"
-                         class="h-full bg-black/30 rounded-lg p-4 font-mono text-xs overflow-y-auto whitespace-pre-wrap text-gray-300"
+                         class="h-full bg-black/30 rounded-lg p-4 font-mono text-xs overflow-y-auto"
                          hx-get="/api/logs"
-                         hx-trigger="every 1s"
+                         hx-trigger="every 2s"
                          hx-target="#log-content"
                          hx-swap="innerHTML">
                         <div id="log-content">{{ t.waiting_logs }}</div>
@@ -398,6 +398,20 @@
                 // Auto-scroll logs
                 const logs = document.getElementById('log-container');
                 if(logs) logs.scrollTop = logs.scrollHeight;
+            }
+
+            // Log rendering
+            if(evt.detail.pathInfo.requestPath === '/api/logs') {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const container = document.getElementById('log-content');
+                if(data.html) {
+                    container.innerHTML = data.html;
+                } else if(data.logs) {
+                    container.innerText = data.logs;
+                }
+                // Auto-scroll
+                const logContainer = document.getElementById('log-container');
+                if(logContainer) logContainer.scrollTop = logContainer.scrollHeight;
             }
 
             // History rendering

@@ -1105,8 +1105,98 @@ def _get_next_run_time() -> Optional[str]:
 
 @app.get("/api/logs")
 async def get_logs():
-    """Gibt die letzten 20 Log-Zeilen zurück."""
-    return {"logs": read_log_tail(LOG_FILE, num_lines=20)}
+    """
+    Gibt die letzten 20 Log-Zeilen formatiert als HTML zurück.
+
+    Formatierung:
+    - Zeitstempel in grau
+    - INFO in blau, WARNING in gelb, ERROR in rot
+    - Dateinamen hervorgehoben
+    - Zeiten in grün
+    """
+    raw_logs = read_log_tail(LOG_FILE, num_lines=20)
+    if not raw_logs:
+        return {"logs": "", "html": "<div class='text-gray-500'>Keine Logs vorhanden...</div>"}
+
+    import re
+    formatted_lines = []
+
+    for line in raw_logs.split('\n'):
+        if not line.strip():
+            continue
+
+        # Parse: 2025-12-02 19:06:45 - INFO - Message
+        match = re.match(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - (\w+) - (.*)$', line)
+
+        if match:
+            timestamp, level, message = match.groups()
+
+            # Level-Farben
+            level_colors = {
+                'INFO': 'text-blue-400',
+                'WARNING': 'text-yellow-400',
+                'ERROR': 'text-red-400',
+                'DEBUG': 'text-gray-500'
+            }
+            level_class = level_colors.get(level, 'text-gray-400')
+
+            # Icons für verschiedene Nachrichten
+            icon = ""
+            msg_class = "text-gray-300"
+
+            if "Loaded:" in message:
+                icon = "📦 "
+                # Extrahiere Dateiname und Zeit
+                file_match = re.match(r'Loaded: (.+) \((\d+\.\d+)ms\)', message)
+                if file_match:
+                    filename, duration = file_match.groups()
+                    message = f'<span class="text-white">{filename}</span> <span class="text-emerald-400">({duration}ms)</span>'
+                    icon = "📦 "
+            elif "Skipped:" in message or "cached" in message.lower():
+                icon = "⚡ "
+                msg_class = "text-emerald-400"
+            elif "Preload finished" in message:
+                icon = "✅ "
+                msg_class = "text-emerald-400 font-semibold"
+            elif "Starting Preload" in message:
+                icon = "🚀 "
+                msg_class = "text-blue-300 font-semibold"
+            elif "Scheduler" in message:
+                icon = "⏰ "
+            elif "Tautulli" in message:
+                icon = "📊 "
+            elif "Plex" in message:
+                icon = "🎬 "
+            elif "Live" in message:
+                icon = "📡 "
+                msg_class = "text-purple-400"
+            elif "Error" in message or "error" in message:
+                icon = "❌ "
+                msg_class = "text-red-400"
+            elif "Warning" in message or "warning" in message:
+                icon = "⚠️ "
+                msg_class = "text-yellow-400"
+            elif "starting" in message.lower():
+                icon = "🔄 "
+            elif "Shutting" in message:
+                icon = "🛑 "
+                msg_class = "text-orange-400"
+
+            # Formatierte Zeile
+            formatted = (
+                f'<div class="flex gap-2 py-0.5 border-b border-slate-800/50">'
+                f'<span class="text-gray-500 shrink-0">{timestamp.split(" ")[1]}</span>'
+                f'<span class="{level_class} shrink-0 w-12">{level}</span>'
+                f'<span class="{msg_class}">{icon}{message}</span>'
+                f'</div>'
+            )
+            formatted_lines.append(formatted)
+        else:
+            # Unformatierte Zeile
+            formatted_lines.append(f'<div class="text-gray-400 py-0.5">{line}</div>')
+
+    html_output = ''.join(formatted_lines)
+    return {"logs": raw_logs, "html": html_output}
 
 
 @app.get("/api/history")
