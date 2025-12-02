@@ -1,7 +1,7 @@
 # 🎬 Unraid Video Preloader
 
-[![Docker Image](https://img.shields.io/docker/v/hoktaar/unraid-video-preloader?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/hoktaar/unraid-video-preloader)
-[![Docker Pulls](https://img.shields.io/docker/pulls/hoktaar/unraid-video-preloader?logo=docker)](https://hub.docker.com/r/hoktaar/unraid-video-preloader)
+[![Docker Image](https://img.shields.io/docker/v/derbarnimer/unraid-video-preloader?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/derbarnimer/unraid-video-preloader)
+[![Docker Pulls](https://img.shields.io/docker/pulls/derbarnimer/unraid-video-preloader?logo=docker)](https://hub.docker.com/r/derbarnimer/unraid-video-preloader)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Smart video caching for Plex & Jellyfin** | **Intelligentes Video-Caching für Plex & Jellyfin**
@@ -32,7 +32,7 @@ Unraid Video Preloader is a Docker application that intelligently preloads video
 # docker-compose.yml
 services:
   video-preloader:
-    image: hoktaar/unraid-video-preloader:latest
+    image: derbarnimer/unraid-video-preloader:latest
     container_name: video-preloader
     restart: unless-stopped
     cap_add:
@@ -114,7 +114,7 @@ Unraid Video Preloader ist eine Docker-Anwendung, die Video-Dateien intelligent 
 # docker-compose.yml
 services:
   video-preloader:
-    image: hoktaar/unraid-video-preloader:latest
+    image: derbarnimer/unraid-video-preloader:latest
     container_name: video-preloader
     restart: unless-stopped
     cap_add:
