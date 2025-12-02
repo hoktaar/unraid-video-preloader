@@ -1,0 +1,24 @@
+services:
+  video-preloader:
+    build: .
+    container_name: video-preloader
+    restart: unless-stopped
+    # Minimale Berechtigungen für RAM-Monitoring (statt privileged: true)
+    cap_add:
+      - SYS_PTRACE
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./config:/config
+      - /mnt/user:/data:ro  # Read-only Zugriff auf deine Medien
+    environment:
+      - TZ=Europe/Berlin
+      - PUID=1000
+      - PGID=1000
+    # Healthcheck für Monitoring
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/stats')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

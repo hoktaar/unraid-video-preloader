@@ -1,0 +1,1015 @@
+import os
+import sys
+import time
+import json
+import fnmatch
+import logging
+import threading
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Optional, Any
+from contextlib import asynccontextmanager
+
+import httpx
+import psutil
+from fastapi import FastAPI, Request, BackgroundTasks, Form, Query
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+# --- CONSTANTS ---
+CONFIG_FILE = "/config/config.json"
+LOG_FILE = "/config/preloader.log"
+HISTORY_FILE = "/config/history.json"
+
+# --- LOGGING SETUP ---
+def setup_logging() -> logging.Logger:
+    """Konfiguriert Dual-Logging für Console und Datei."""
+    log = logging.getLogger("preloader")
+    log.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # File Handler
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    file_handler = logging.FileHandler(LOG_FILE)
+    file_handler.setFormatter(formatter)
+    log.addHandler(file_handler)
+
+    # Console Handler (für docker logs)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    log.addHandler(console_handler)
+
+    return log
+
+logger = setup_logging()
+
+# --- SCHEDULER ---
+scheduler = AsyncIOScheduler()
+
+# Templates mit absolutem Pfad (Container-kompatibel)
+TEMPLATE_DIR = Path("/app/templates")
+templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# --- DATA MODELS ---
+
+class ScheduleProfile(BaseModel):
+    """Zeitbasiertes Profil für unterschiedliche Preload-Größen."""
+    start_hour: int = 0
+    end_hour: int = 24
+    preload_head_mb: int = 60
+
+
+class Config(BaseModel):
+    """Konfigurationsmodell für den Video Preloader."""
+    # Basis-Pfade
+    video_paths: List[str] = ["/data/movies", "/data/tv"]
+    priority_paths: List[str] = []  # Diese werden zuerst geladen
+    exclude_patterns: List[str] = ["*/Samples/*", "*/Extras/*", "*/Featurettes/*"]
+
+    # Preload-Einstellungen
+    min_size_mb: int = 500
+    preload_head_mb: int = 60
+    preload_tail_mb: int = 1
+    ram_max_usage_percent: int = 80
+    video_extensions: List[str] = ["mkv", "mp4", "avi", "mov", "wmv", "m4v"]
+    cache_threshold_ms: int = 150
+    max_files_per_run: int = 50
+
+    # Scheduler
+    scheduler_enabled: bool = False
+    cron_schedule: str = "0 */2 * * *"  # Alle 2 Stunden
+
+    # Zeitbasierte Profile (z.B. mehr laden zur Prime-Time)
+    time_profiles: List[ScheduleProfile] = [
+        ScheduleProfile(start_hour=6, end_hour=18, preload_head_mb=30),
+        ScheduleProfile(start_hour=18, end_hour=23, preload_head_mb=100),
+    ]
+    use_time_profiles: bool = False
+
+    # Plex Integration
+    plex_url: str = ""
+    plex_token: str = ""
+    plex_enabled: bool = False
+
+    # Tautulli Integration
+    tautulli_url: str = ""
+    tautulli_api_key: str = ""
+    tautulli_enabled: bool = False
+    tautulli_top_movies_count: int = 10  # Top X meistgesehene Filme
+    tautulli_next_episodes_count: int = 5  # Nächste X Folgen pro Serie
+
+    @classmethod
+    def load(cls) -> "Config":
+        """Lädt die Konfiguration aus der JSON-Datei."""
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    data = json.load(f)
+                    # Konvertiere time_profiles falls vorhanden
+                    if 'time_profiles' in data:
+                        data['time_profiles'] = [
+                            ScheduleProfile(**p) if isinstance(p, dict) else p
+                            for p in data['time_profiles']
+                        ]
+                    return cls(**data)
+            except Exception as e:
+                logger.error(f"Config load error: {e}")
+        return cls()
+
+    def save(self):
+        """Speichert die Konfiguration in die JSON-Datei."""
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(self.model_dump(), f, indent=4)
+
+    def get_current_preload_size(self) -> int:
+        """Gibt die aktuelle Preload-Größe basierend auf Zeitprofil zurück."""
+        if not self.use_time_profiles:
+            return self.preload_head_mb
+
+        current_hour = datetime.now().hour
+        for profile in self.time_profiles:
+            if profile.start_hour <= current_hour < profile.end_hour:
+                return profile.preload_head_mb
+
+        return self.preload_head_mb
+
+
+class PreloadHistoryEntry(BaseModel):
+    """Ein Eintrag in der Preload-Historie."""
+    timestamp: str
+    preloaded: int
+    skipped: int
+    duration_seconds: int
+    source: str = "manual"  # manual, scheduler, tautulli, plex
+    files_processed: List[str] = []
+
+
+# --- GLOBAL STATE (Thread-Safe) ---
+class AppState:
+    """Thread-sicherer Anwendungszustand mit Historie."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._is_running: bool = False
+        self.last_run_stats: dict = {
+            "preloaded": 0,
+            "skipped": 0,
+            "duration": 0,
+            "last_run": "Never"
+        }
+        self.current_action: str = "Idle"
+        self.history: List[PreloadHistoryEntry] = self._load_history()
+
+    @property
+    def is_running(self) -> bool:
+        """Thread-sicherer Getter für is_running."""
+        with self._lock:
+            return self._is_running
+
+    @is_running.setter
+    def is_running(self, value: bool):
+        """Thread-sicherer Setter für is_running."""
+        with self._lock:
+            self._is_running = value
+
+    def _load_history(self) -> List[PreloadHistoryEntry]:
+        """Lädt die Historie aus der JSON-Datei."""
+        if os.path.exists(HISTORY_FILE):
+            try:
+                with open(HISTORY_FILE, 'r') as f:
+                    data = json.load(f)
+                    return [PreloadHistoryEntry(**entry) for entry in data[-100:]]
+            except Exception as e:
+                logger.error(f"History load error: {e}")
+        return []
+
+    def add_history_entry(self, entry: PreloadHistoryEntry):
+        """Fügt einen Eintrag zur Historie hinzu und speichert."""
+        self.history.append(entry)
+        # Nur die letzten 100 Einträge behalten
+        self.history = self.history[-100:]
+        self._save_history()
+
+    def _save_history(self):
+        """Speichert die Historie in die JSON-Datei."""
+        try:
+            os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+            with open(HISTORY_FILE, 'w') as f:
+                json.dump([e.model_dump() for e in self.history], f, indent=2)
+        except Exception as e:
+            logger.error(f"History save error: {e}")
+
+
+state = AppState()
+config = Config.load()
+
+# --- HELPER FUNCTIONS ---
+
+def get_ram_usage() -> dict:
+    """Gibt RAM-Informationen des Hosts zurück."""
+    mem = psutil.virtual_memory()
+    return {
+        "total": f"{mem.total / (1024**3):.2f} GB",
+        "available": f"{mem.available / (1024**3):.2f} GB",
+        "percent": mem.percent
+    }
+
+
+def is_video_file(filename: str, extensions: List[str]) -> bool:
+    """Prüft effizient ob eine Datei eine Video-Datei ist."""
+    ext_tuple = tuple(f".{ext.lower()}" for ext in extensions)
+    return filename.lower().endswith(ext_tuple)
+
+
+def matches_exclude_pattern(filepath: str, patterns: List[str]) -> bool:
+    """Prüft ob ein Pfad einem Exclude-Pattern entspricht."""
+    for pattern in patterns:
+        if fnmatch.fnmatch(filepath, pattern):
+            return True
+    return False
+
+
+def read_file_chunk(filepath: str, size_mb: int, offset_from_end: bool = False) -> float:
+    """Liest einen Teil der Datei um sie in den System-Cache zu laden."""
+    size_bytes = size_mb * 1024 * 1024
+    try:
+        with open(filepath, "rb") as f:
+            if offset_from_end:
+                f.seek(0, 2)
+                file_size = f.tell()
+                if file_size < size_bytes:
+                    f.seek(0)
+                else:
+                    f.seek(-size_bytes, 2)
+
+            start_t = time.perf_counter()
+            f.read(size_bytes)
+            end_t = time.perf_counter()
+            return (end_t - start_t) * 1000
+    except Exception as e:
+        logger.error(f"Error reading {filepath}: {e}")
+        return 0
+
+
+def read_log_tail(filepath: str, num_lines: int = 20) -> str:
+    """Liest effizient die letzten N Zeilen einer Log-Datei."""
+    if not os.path.exists(filepath):
+        return "No logs yet."
+
+    try:
+        with open(filepath, "rb") as f:
+            f.seek(0, 2)
+            file_size = f.tell()
+            if file_size == 0:
+                return "No logs yet."
+
+            buffer_size = min(file_size, num_lines * 150)
+            f.seek(max(0, file_size - buffer_size))
+            lines = f.read().decode('utf-8', errors='replace').splitlines()
+            return '\n'.join(lines[-num_lines:])
+    except Exception as e:
+        logger.error(f"Error reading log file: {e}")
+        return f"Error reading logs: {e}"
+
+
+def check_file_cached(filepath: str, size_mb: int = 1) -> bool:
+    """Prüft ob eine Datei bereits im Cache ist (schnelle Lesezeit)."""
+    duration = read_file_chunk(filepath, size_mb)
+    return duration < config.cache_threshold_ms
+
+
+# --- TAUTULLI API CLIENT ---
+
+async def fetch_tautulli_data() -> Dict[str, List[str]]:
+    """
+    Holt Daten von Tautulli: Meistgesehene Filme und nächste Episoden.
+
+    Returns:
+        Dict mit 'top_movies' und 'next_episodes' Pfadlisten.
+    """
+    result = {"top_movies": [], "next_episodes": []}
+
+    if not config.tautulli_enabled or not config.tautulli_url or not config.tautulli_api_key:
+        return result
+
+    base_url = config.tautulli_url.rstrip('/')
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            # 1. Meistgesehene Filme (letzte 30 Tage)
+            movies_resp = await client.get(
+                f"{base_url}/api/v2",
+                params={
+                    "apikey": config.tautulli_api_key,
+                    "cmd": "get_home_stats",
+                    "stat_id": "top_movies",
+                    "stats_count": config.tautulli_top_movies_count,
+                    "time_range": 30
+                }
+            )
+
+            if movies_resp.status_code == 200:
+                data = movies_resp.json()
+                if data.get("response", {}).get("result") == "success":
+                    rows = data.get("response", {}).get("data", {}).get("rows", [])
+                    for movie in rows:
+                        if "file" in movie:
+                            result["top_movies"].append(movie["file"])
+                        elif "grandparent_title" in movie:
+                            # Suche Datei über Metadaten
+                            file_path = await _find_media_file(client, base_url, movie.get("rating_key"))
+                            if file_path:
+                                result["top_movies"].append(file_path)
+
+            # 2. Kürzlich angesehene Serien - hole nächste ungesehene Folgen
+            recently_watched_resp = await client.get(
+                f"{base_url}/api/v2",
+                params={
+                    "apikey": config.tautulli_api_key,
+                    "cmd": "get_history",
+                    "media_type": "episode",
+                    "length": 50
+                }
+            )
+
+            if recently_watched_resp.status_code == 200:
+                data = recently_watched_resp.json()
+                if data.get("response", {}).get("result") == "success":
+                    history = data.get("response", {}).get("data", {}).get("data", [])
+
+                    # Sammle einzigartige Serien
+                    seen_shows: Dict[str, dict] = {}
+                    for entry in history:
+                        show_key = entry.get("grandparent_rating_key")
+                        if show_key and show_key not in seen_shows:
+                            seen_shows[show_key] = {
+                                "title": entry.get("grandparent_title"),
+                                "last_season": entry.get("parent_media_index", 0),
+                                "last_episode": entry.get("media_index", 0)
+                            }
+
+                    # Für jede Serie: Finde nächste Folgen
+                    for show_key, show_info in list(seen_shows.items())[:config.tautulli_next_episodes_count]:
+                        next_eps = await _find_next_episodes(
+                            client, base_url, show_key,
+                            show_info["last_season"],
+                            show_info["last_episode"]
+                        )
+                        result["next_episodes"].extend(next_eps)
+
+            logger.info(f"Tautulli: {len(result['top_movies'])} top movies, {len(result['next_episodes'])} next episodes")
+
+        except Exception as e:
+            logger.error(f"Tautulli API error: {e}")
+
+    return result
+
+
+async def _find_media_file(client: httpx.AsyncClient, base_url: str, rating_key: str) -> Optional[str]:
+    """Findet den Dateipfad für ein Medium über rating_key."""
+    try:
+        resp = await client.get(
+            f"{base_url}/api/v2",
+            params={
+                "apikey": config.tautulli_api_key,
+                "cmd": "get_metadata",
+                "rating_key": rating_key
+            }
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            metadata = data.get("response", {}).get("data", {})
+            # Prüfe verschiedene Pfad-Felder
+            for field in ["file", "file_path", "media_info"]:
+                if field in metadata:
+                    if field == "media_info" and isinstance(metadata[field], list):
+                        for media in metadata[field]:
+                            for part in media.get("parts", []):
+                                if "file" in part:
+                                    return part["file"]
+                    else:
+                        return metadata[field]
+    except Exception as e:
+        logger.debug(f"Could not find file for rating_key {rating_key}: {e}")
+    return None
+
+
+async def _find_next_episodes(
+    client: httpx.AsyncClient,
+    base_url: str,
+    show_key: str,
+    last_season: int,
+    last_episode: int
+) -> List[str]:
+    """Findet die nächsten ungesehenen Episoden einer Serie."""
+    episodes = []
+    try:
+        # Hole alle Episoden der Serie
+        resp = await client.get(
+            f"{base_url}/api/v2",
+            params={
+                "apikey": config.tautulli_api_key,
+                "cmd": "get_children_metadata",
+                "rating_key": show_key
+            }
+        )
+
+        if resp.status_code == 200:
+            data = resp.json()
+            seasons = data.get("response", {}).get("data", {}).get("children_list", [])
+
+            for season in seasons:
+                season_num = season.get("media_index", 0)
+                if season_num < last_season:
+                    continue
+
+                # Hole Episoden dieser Staffel
+                season_resp = await client.get(
+                    f"{base_url}/api/v2",
+                    params={
+                        "apikey": config.tautulli_api_key,
+                        "cmd": "get_children_metadata",
+                        "rating_key": season.get("rating_key")
+                    }
+                )
+
+                if season_resp.status_code == 200:
+                    ep_data = season_resp.json()
+                    eps = ep_data.get("response", {}).get("data", {}).get("children_list", [])
+
+                    for ep in eps:
+                        ep_num = ep.get("media_index", 0)
+                        # Nur Folgen nach der zuletzt gesehenen
+                        if season_num == last_season and ep_num <= last_episode:
+                            continue
+
+                        file_path = await _find_media_file(client, base_url, ep.get("rating_key"))
+                        if file_path:
+                            episodes.append(file_path)
+                            if len(episodes) >= 3:  # Max 3 nächste Folgen pro Serie
+                                return episodes
+    except Exception as e:
+        logger.debug(f"Error finding next episodes: {e}")
+
+    return episodes
+
+
+# --- PLEX API CLIENT ---
+
+async def fetch_plex_on_deck() -> List[str]:
+    """
+    Holt 'On Deck' (Continue Watching) Inhalte von Plex.
+
+    Returns:
+        Liste von Dateipfaden.
+    """
+    files = []
+
+    if not config.plex_enabled or not config.plex_url or not config.plex_token:
+        return files
+
+    base_url = config.plex_url.rstrip('/')
+    headers = {
+        "X-Plex-Token": config.plex_token,
+        "Accept": "application/json"
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            # On Deck Endpoint
+            resp = await client.get(
+                f"{base_url}/library/onDeck",
+                headers=headers
+            )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("MediaContainer", {}).get("Metadata", [])
+
+                for item in items:
+                    # Hole Mediendaten
+                    for media in item.get("Media", []):
+                        for part in media.get("Part", []):
+                            if "file" in part:
+                                files.append(part["file"])
+
+                logger.info(f"Plex On Deck: {len(files)} files found")
+
+        except Exception as e:
+            logger.error(f"Plex API error: {e}")
+
+    return files
+
+
+# --- PRELOAD LOGIC ---
+
+def discover_files(source: str = "filesystem") -> List[tuple]:
+    """
+    Entdeckt Video-Dateien basierend auf Konfiguration.
+
+    Args:
+        source: Quelle der Dateien (filesystem, priority, tautulli, plex).
+
+    Returns:
+        Liste von (priority, mtime, filepath) Tupeln.
+    """
+    files = []
+    min_size_bytes = config.min_size_mb * 1024 * 1024
+
+    def scan_path(path: str, priority: int = 0):
+        if not os.path.exists(path):
+            logger.warning(f"Path not found: {path}")
+            return
+
+        for root, _, filenames in os.walk(path):
+            for filename in filenames:
+                if not is_video_file(filename, config.video_extensions):
+                    continue
+
+                full_path = os.path.join(root, filename)
+
+                # Exclude-Pattern prüfen
+                if matches_exclude_pattern(full_path, config.exclude_patterns):
+                    continue
+
+                try:
+                    fsize = os.path.getsize(full_path)
+                    if fsize >= min_size_bytes:
+                        mtime = os.path.getmtime(full_path)
+                        files.append((priority, mtime, full_path))
+                except OSError:
+                    pass
+
+    # Priority-Pfade zuerst (höhere Priorität = niedrigere Zahl)
+    for i, path in enumerate(config.priority_paths):
+        scan_path(path, priority=i)
+
+    # Normale Pfade
+    for path in config.video_paths:
+        scan_path(path, priority=100)
+
+    return files
+
+
+async def run_preload(source: str = "manual"):
+    """
+    Führt den Preload-Prozess aus.
+
+    Args:
+        source: Quelle des Aufrufs (manual, scheduler, webhook).
+    """
+    global state, config
+
+    if state.is_running:
+        logger.warning("Preload already running, skipping.")
+        return
+
+    state.is_running = True
+    state.current_action = "Starting Preload..."
+    stats = {"preloaded": 0, "skipped": 0, "start_time": time.time(), "files": []}
+
+    logger.info(f"Starting Preload Run (source: {source})")
+
+    try:
+        # RAM Check
+        mem = psutil.virtual_memory()
+        if mem.percent > config.ram_max_usage_percent:
+            logger.warning(f"RAM usage high ({mem.percent}%), aborting.")
+            state.current_action = f"Aborted: RAM High ({mem.percent}%)"
+            return
+
+        # Sammle Dateien aus verschiedenen Quellen
+        files_to_check: List[str] = []
+
+        # 1. Tautulli-Daten (höchste Priorität)
+        if config.tautulli_enabled:
+            state.current_action = "Fetching Tautulli data..."
+            tautulli_data = await fetch_tautulli_data()
+            files_to_check.extend(tautulli_data["top_movies"])
+            files_to_check.extend(tautulli_data["next_episodes"])
+
+        # 2. Plex On Deck
+        if config.plex_enabled:
+            state.current_action = "Fetching Plex On Deck..."
+            plex_files = await fetch_plex_on_deck()
+            files_to_check.extend(plex_files)
+
+        # 3. Filesystem-Scan
+        state.current_action = "Scanning filesystem..."
+        fs_files = discover_files()
+        # Sortieren: erst nach Priorität, dann nach mtime (neueste zuerst)
+        fs_files.sort(key=lambda x: (x[0], -x[1]))
+        files_to_check.extend([f[2] for f in fs_files])
+
+        # Duplikate entfernen (behalte Reihenfolge)
+        seen = set()
+        unique_files = []
+        for f in files_to_check:
+            if f not in seen and os.path.exists(f):
+                seen.add(f)
+                unique_files.append(f)
+
+        # Limitieren
+        unique_files = unique_files[:config.max_files_per_run]
+
+        state.current_action = f"Processing {len(unique_files)} candidates..."
+        logger.info(f"Found {len(unique_files)} files to check")
+
+        # Zeitbasierte Preload-Größe
+        preload_size = config.get_current_preload_size()
+
+        for filepath in unique_files:
+            filename = os.path.basename(filepath)
+            state.current_action = f"Checking: {filename}"
+
+            # Preload Head
+            duration = read_file_chunk(filepath, preload_size)
+
+            if duration < config.cache_threshold_ms:
+                stats["skipped"] += 1
+                logger.info(f"Cached: {filename} ({duration:.2f}ms)")
+            else:
+                stats["preloaded"] += 1
+                stats["files"].append(filename)
+                logger.info(f"Loaded: {filename} ({duration:.2f}ms)")
+                # Preload Tail
+                read_file_chunk(filepath, config.preload_tail_mb, offset_from_end=True)
+
+            # RAM-Check während des Laufs
+            if psutil.virtual_memory().percent > config.ram_max_usage_percent:
+                logger.warning("RAM limit reached during preload, stopping.")
+                break
+
+        # Stats aktualisieren
+        duration_secs = int(time.time() - stats["start_time"])
+        state.last_run_stats = {
+            "preloaded": stats["preloaded"],
+            "skipped": stats["skipped"],
+            "duration": duration_secs,
+            "last_run": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        # Historie speichern
+        history_entry = PreloadHistoryEntry(
+            timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+            preloaded=stats["preloaded"],
+            skipped=stats["skipped"],
+            duration_seconds=duration_secs,
+            source=source,
+            files_processed=stats["files"][:20]  # Max 20 Dateien speichern
+        )
+        state.add_history_entry(history_entry)
+
+        logger.info(f"Preload finished: {stats['preloaded']} loaded, {stats['skipped']} cached, {duration_secs}s")
+
+    except Exception as e:
+        logger.error(f"Preload task error: {e}")
+        state.current_action = f"Error: {e}"
+    finally:
+        state.current_action = "Idle"
+        state.is_running = False
+
+
+def preload_task():
+    """Synchroner Wrapper für run_preload (für Background-Tasks)."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_preload("manual"))
+    finally:
+        loop.close()
+
+
+def scheduled_preload_task():
+    """Task für den Scheduler."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_preload("scheduler"))
+    finally:
+        loop.close()
+
+# --- SCHEDULER MANAGEMENT ---
+
+def setup_scheduler():
+    """Richtet den Scheduler basierend auf der Konfiguration ein."""
+    global scheduler
+
+    # Alle bestehenden Jobs entfernen
+    scheduler.remove_all_jobs()
+
+    if config.scheduler_enabled and config.cron_schedule:
+        try:
+            trigger = CronTrigger.from_crontab(config.cron_schedule)
+            scheduler.add_job(
+                scheduled_preload_task,
+                trigger=trigger,
+                id="preload_job",
+                replace_existing=True
+            )
+            logger.info(f"Scheduler enabled: {config.cron_schedule}")
+        except Exception as e:
+            logger.error(f"Invalid cron schedule: {e}")
+
+
+# --- APP LIFECYCLE ---
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle-Manager für FastAPI App."""
+    # Startup
+    logger.info("Video Preloader starting...")
+    setup_scheduler()
+    if not scheduler.running:
+        scheduler.start()
+    logger.info("Scheduler started")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down scheduler...")
+    scheduler.shutdown()
+
+
+# --- APP INITIALIZATION ---
+app = FastAPI(title="Unraid Video Preloader", lifespan=lifespan)
+
+
+# --- ROUTES ---
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Rendert die Hauptseite mit Konfiguration und Status."""
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "config": config, "state": state}
+    )
+
+
+@app.get("/api/stats")
+async def get_stats():
+    """Gibt aktuelle System-Statistiken als JSON zurück."""
+    mem = get_ram_usage()
+    return JSONResponse({
+        "ram_percent": mem['percent'],
+        "ram_text": f"{mem['available']} available",
+        "status": state.current_action,
+        "is_running": state.is_running,
+        "last_run": state.last_run_stats,
+        "scheduler_enabled": config.scheduler_enabled,
+        "next_run": _get_next_run_time()
+    })
+
+
+def _get_next_run_time() -> Optional[str]:
+    """Gibt die nächste geplante Ausführungszeit zurück."""
+    try:
+        job = scheduler.get_job("preload_job")
+        if job and job.next_run_time:
+            return job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        pass
+    return None
+
+
+@app.get("/api/logs")
+async def get_logs():
+    """Gibt die letzten 20 Log-Zeilen zurück."""
+    return {"logs": read_log_tail(LOG_FILE, num_lines=20)}
+
+
+@app.get("/api/history")
+async def get_history():
+    """Gibt die Preload-Historie zurück."""
+    return JSONResponse({
+        "history": [entry.model_dump() for entry in state.history[-20:]]
+    })
+
+
+@app.post("/start")
+async def start_preload(background_tasks: BackgroundTasks):
+    """Startet den Preload-Task als Background-Prozess."""
+    if not state.is_running:
+        background_tasks.add_task(preload_task)
+        return {"status": "Started"}
+    return {"status": "Already running"}
+
+
+@app.post("/api/preload")
+async def preload_single_file(
+    path: str = Form(...),
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Lädt eine einzelne Datei in den Cache.
+
+    Args:
+        path: Pfad zur Video-Datei.
+    """
+    if not os.path.exists(path):
+        return JSONResponse({"error": "File not found"}, status_code=404)
+
+    if not is_video_file(path, config.video_extensions):
+        return JSONResponse({"error": "Not a video file"}, status_code=400)
+
+    preload_size = config.get_current_preload_size()
+    duration = read_file_chunk(path, preload_size)
+    read_file_chunk(path, config.preload_tail_mb, offset_from_end=True)
+
+    cached = duration < config.cache_threshold_ms
+
+    return JSONResponse({
+        "path": path,
+        "duration_ms": round(duration, 2),
+        "was_cached": cached,
+        "status": "already_cached" if cached else "loaded"
+    })
+
+
+@app.get("/api/cache-status")
+async def check_cache_status(path: str = Query(...)):
+    """
+    Prüft ob eine Datei im Cache ist.
+
+    Args:
+        path: Pfad zur Video-Datei.
+    """
+    if not os.path.exists(path):
+        return JSONResponse({"error": "File not found"}, status_code=404)
+
+    duration = read_file_chunk(path, 1)  # 1MB Probe
+    cached = duration < config.cache_threshold_ms
+
+    return JSONResponse({
+        "path": path,
+        "cached": cached,
+        "read_time_ms": round(duration, 2)
+    })
+
+
+@app.post("/api/webhook/plex")
+async def plex_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Empfängt Webhooks von Plex und triggert Preload bei Bedarf.
+
+    Reagiert auf 'media.play' Events.
+    """
+    try:
+        # Plex sendet multipart/form-data
+        form = await request.form()
+        payload_str = form.get("payload", "{}")
+        payload = json.loads(payload_str)
+
+        event = payload.get("event", "")
+
+        if event == "media.play":
+            # Jemand schaut etwas - preloade verwandte Inhalte
+            logger.info(f"Plex webhook: {event}")
+            if not state.is_running:
+                background_tasks.add_task(preload_task)
+                return {"status": "Preload triggered"}
+
+        return {"status": "OK", "event": event}
+
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/save_config_all")
+async def save_config_all(
+    # Pfade
+    video_paths: str = Form(...),
+    priority_paths: str = Form(""),
+    exclude_patterns: str = Form(""),
+    # Preload-Einstellungen
+    preload_head_mb: int = Form(60),
+    preload_tail_mb: int = Form(1),
+    min_size_mb: int = Form(500),
+    max_files_per_run: int = Form(50),
+    cache_threshold_ms: int = Form(150),
+    ram_max_usage_percent: int = Form(80),
+    video_extensions: str = Form("mkv, mp4, avi, mov, wmv, m4v"),
+    # Scheduler
+    scheduler_enabled: bool = Form(False),
+    cron_schedule: str = Form("0 */2 * * *"),
+    use_time_profiles: bool = Form(False),
+    profile_day_mb: int = Form(30),
+    profile_evening_mb: int = Form(100),
+    profile_night_mb: int = Form(60),
+    # Tautulli
+    tautulli_enabled: bool = Form(False),
+    tautulli_url: str = Form(""),
+    tautulli_api_key: str = Form(""),
+    tautulli_top_movies_count: int = Form(10),
+    tautulli_next_episodes_count: int = Form(5),
+    # Plex
+    plex_enabled: bool = Form(False),
+    plex_url: str = Form(""),
+    plex_token: str = Form("")
+):
+    """Speichert alle Konfigurationseinstellungen aus dem Webformular."""
+
+    # Pfade
+    config.video_paths = [p.strip() for p in video_paths.split(',') if p.strip()]
+    config.priority_paths = [p.strip() for p in priority_paths.split(',') if p.strip()]
+    config.exclude_patterns = [p.strip() for p in exclude_patterns.split(',') if p.strip()]
+
+    # Preload-Einstellungen
+    config.preload_head_mb = preload_head_mb
+    config.preload_tail_mb = preload_tail_mb
+    config.min_size_mb = min_size_mb
+    config.max_files_per_run = max_files_per_run
+    config.cache_threshold_ms = cache_threshold_ms
+    config.ram_max_usage_percent = ram_max_usage_percent
+    config.video_extensions = [ext.strip().lower() for ext in video_extensions.split(',') if ext.strip()]
+
+    # Scheduler
+    old_scheduler_state = config.scheduler_enabled
+    config.scheduler_enabled = scheduler_enabled
+    config.cron_schedule = cron_schedule
+    config.use_time_profiles = use_time_profiles
+
+    # Zeit-Profile aktualisieren
+    config.time_profiles = [
+        ScheduleProfile(start_hour=6, end_hour=18, preload_head_mb=profile_day_mb),
+        ScheduleProfile(start_hour=18, end_hour=23, preload_head_mb=profile_evening_mb),
+        ScheduleProfile(start_hour=23, end_hour=6, preload_head_mb=profile_night_mb),
+    ]
+
+    # Tautulli
+    config.tautulli_enabled = tautulli_enabled
+    config.tautulli_url = tautulli_url
+    config.tautulli_api_key = tautulli_api_key
+    config.tautulli_top_movies_count = tautulli_top_movies_count
+    config.tautulli_next_episodes_count = tautulli_next_episodes_count
+
+    # Plex
+    config.plex_enabled = plex_enabled
+    config.plex_url = plex_url
+    config.plex_token = plex_token
+
+    config.save()
+
+    # Scheduler neu einrichten wenn sich was geändert hat
+    if old_scheduler_state != scheduler_enabled or scheduler_enabled:
+        setup_scheduler()
+
+    logger.info(f"All config saved: {len(config.video_paths)} paths, scheduler={'on' if scheduler_enabled else 'off'}")
+    return HTMLResponse('<span class="text-green-500">✓ Alle Einstellungen gespeichert!</span>')
+
+
+@app.get("/api/test-tautulli")
+async def test_tautulli():
+    """Testet die Tautulli-Verbindung."""
+    if not config.tautulli_url or not config.tautulli_api_key:
+        return JSONResponse({"status": "error", "message": "Tautulli not configured"})
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{config.tautulli_url.rstrip('/')}/api/v2",
+                params={
+                    "apikey": config.tautulli_api_key,
+                    "cmd": "get_server_info"
+                }
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("response", {}).get("result") == "success":
+                    return JSONResponse({"status": "success", "message": "Connected to Tautulli!"})
+        return JSONResponse({"status": "error", "message": "Invalid response from Tautulli"})
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.get("/api/test-plex")
+async def test_plex():
+    """Testet die Plex-Verbindung."""
+    if not config.plex_url or not config.plex_token:
+        return JSONResponse({"status": "error", "message": "Plex not configured"})
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{config.plex_url.rstrip('/')}/",
+                headers={
+                    "X-Plex-Token": config.plex_token,
+                    "Accept": "application/json"
+                }
+            )
+            if resp.status_code == 200:
+                return JSONResponse({"status": "success", "message": "Connected to Plex!"})
+        return JSONResponse({"status": "error", "message": f"HTTP {resp.status_code}"})
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)})

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unraid Video Preloader</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .toggle-checkbox:checked { right: 0; border-color: #3b82f6; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #3b82f6; }
+    </style>
+</head>
+<body class="p-6 max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                Video Preloader <span class="text-xs text-gray-500 border border-gray-700 rounded px-2 py-1 ml-2">v4.0</span>
+            </h1>
+            <p class="text-gray-400 text-sm mt-1">Smart caching for Plex & Jellyfin with Tautulli integration</p>
+        </div>
+
+        <!-- Status Indicator (Polled) -->
+        <div hx-get="/api/stats" hx-trigger="every 2s" hx-swap="none" id="poller"></div>
+
+        <div class="text-right">
+            <div id="ram-display" class="text-2xl font-mono font-bold">--%</div>
+            <div class="text-xs text-gray-500">RAM Usage</div>
+            <div id="scheduler-status" class="text-xs text-gray-500 mt-1"></div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Main Controls -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <!-- Dashboard Card -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">Status</h2>
+                    <span id="status-text" class="text-sm font-mono text-blue-300">Idle</span>
+                </div>
+
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                    <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                        <div id="stat-preloaded" class="text-2xl font-bold text-emerald-400">{{ state.last_run_stats.preloaded }}</div>
+                        <div class="text-xs text-gray-400">Preloaded</div>
+                    </div>
+                    <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                        <div id="stat-skipped" class="text-2xl font-bold text-blue-400">{{ state.last_run_stats.skipped }}</div>
+                        <div class="text-xs text-gray-400">Cached</div>
+                    </div>
+                    <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                        <div id="stat-duration" class="text-2xl font-bold text-purple-400">{{ state.last_run_stats.duration }}s</div>
+                        <div class="text-xs text-gray-400">Duration</div>
+                    </div>
+                    <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                        <div id="stat-lastrun" class="text-sm font-bold text-orange-400">{{ state.last_run_stats.last_run }}</div>
+                        <div class="text-xs text-gray-400">Last Run</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <button hx-post="/start" hx-swap="none" id="start-btn"
+                            class="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg font-bold shadow-lg transition-all transform active:scale-95 disabled:opacity-50">
+                        ▶ Run Preloader Now
+                    </button>
+                    <button onclick="showTab('history')"
+                            class="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold transition-all">
+                        📊 History
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="glass rounded-xl shadow-xl overflow-hidden">
+                <div class="flex border-b border-slate-700">
+                    <button onclick="showTab('logs')" id="tab-logs" class="px-6 py-3 text-sm font-semibold tab-active">
+                        📜 Live Logs
+                    </button>
+                    <button onclick="showTab('history')" id="tab-history" class="px-6 py-3 text-sm font-semibold text-gray-400 hover:text-white">
+                        📊 History
+                    </button>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="content-logs" class="p-6 h-80">
+                    <div id="log-container"
+                         class="h-full bg-black/30 rounded-lg p-4 font-mono text-xs overflow-y-auto whitespace-pre-wrap text-gray-300"
+                         hx-get="/api/logs"
+                         hx-trigger="every 1s"
+                         hx-target="#log-content"
+                         hx-swap="innerHTML">
+                        <div id="log-content">Waiting for logs...</div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="content-history" class="p-6 h-80 hidden">
+                    <div id="history-container"
+                         class="h-full bg-black/30 rounded-lg p-4 overflow-y-auto"
+                         hx-get="/api/history"
+                         hx-trigger="load, every 10s"
+                         hx-swap="innerHTML">
+                        <div class="text-gray-500 text-center">Loading history...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Sidebar -->
+        <div class="space-y-6">
+
+            <!-- Unified Settings Form -->
+            <form hx-post="/save_config_all" hx-target="#save-msg-all">
+
+                <!-- Paths Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <h2 class="text-xl font-semibold mb-4">📁 Pfade</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Video-Pfade (kommagetrennt)</label>
+                            <textarea name="video_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-20" placeholder="/data/movies, /data/tv">{{ config.video_paths|join(', ') }}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Prioritäts-Pfade (werden zuerst geladen)</label>
+                            <textarea name="priority_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16" placeholder="/data/tv/Currently Watching">{{ config.priority_paths|join(', ') }}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Exclude-Patterns (werden übersprungen)</label>
+                            <textarea name="exclude_patterns" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16" placeholder="*/Samples/*, */Extras/*">{{ config.exclude_patterns|join(', ') }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preload Settings Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <h2 class="text-xl font-semibold mb-4">⚡ Preload-Einstellungen</h2>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Head-Preload (MB)</label>
+                                <input type="number" name="preload_head_mb" value="{{ config.preload_head_mb }}" min="1" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                                <p class="text-xs text-gray-500 mt-1">Anfang der Datei</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Tail-Preload (MB)</label>
+                                <input type="number" name="preload_tail_mb" value="{{ config.preload_tail_mb }}" min="1" max="100" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                                <p class="text-xs text-gray-500 mt-1">Ende der Datei</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Min. Dateigröße (MB)</label>
+                                <input type="number" name="min_size_mb" value="{{ config.min_size_mb }}" min="50" max="5000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                                <p class="text-xs text-gray-500 mt-1">Kleinere ignorieren</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Max. Dateien pro Run</label>
+                                <input type="number" name="max_files_per_run" value="{{ config.max_files_per_run }}" min="5" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Cache-Threshold (ms)</label>
+                                <input type="number" name="cache_threshold_ms" value="{{ config.cache_threshold_ms }}" min="10" max="1000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                                <p class="text-xs text-gray-500 mt-1">Schneller = gecacht</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Max RAM Usage: <span id="ram-value">{{ config.ram_max_usage_percent }}</span>%</label>
+                                <input type="range" name="ram_max_usage_percent" min="10" max="95" value="{{ config.ram_max_usage_percent }}" class="w-full accent-blue-500 mt-2" oninput="document.getElementById('ram-value').innerText = this.value">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Video-Erweiterungen</label>
+                            <input type="text" name="video_extensions" value="{{ config.video_extensions|join(', ') }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="mkv, mp4, avi, mov">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scheduler Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">⏰ Auto-Scheduler</h2>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" name="scheduler_enabled" class="sr-only peer" {% if config.scheduler_enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                        </label>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Cron-Schedule</label>
+                            <input type="text" name="cron_schedule" value="{{ config.cron_schedule }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm font-mono" placeholder="0 */2 * * *">
+                            <p class="text-xs text-gray-500 mt-1">Format: min hour day month weekday</p>
+                        </div>
+
+                        <!-- Time Profiles -->
+                        <div class="border-t border-slate-700 pt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-xs font-bold text-gray-400">🕐 Zeit-Profile (unterschiedliche Größen)</label>
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" name="use_time_profiles" class="sr-only peer" {% if config.use_time_profiles %}checked{% endif %}>
+                                    <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-xs">
+                                <div class="bg-slate-800/50 p-2 rounded">
+                                    <div class="text-gray-400">Tag (6-18h)</div>
+                                    <input type="number" name="profile_day_mb" value="{{ config.time_profiles[0].preload_head_mb if config.time_profiles|length > 0 else 30 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
+                                    <div class="text-gray-500">MB</div>
+                                </div>
+                                <div class="bg-slate-800/50 p-2 rounded">
+                                    <div class="text-gray-400">Abend (18-23h)</div>
+                                    <input type="number" name="profile_evening_mb" value="{{ config.time_profiles[1].preload_head_mb if config.time_profiles|length > 1 else 100 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
+                                    <div class="text-gray-500">MB</div>
+                                </div>
+                                <div class="bg-slate-800/50 p-2 rounded">
+                                    <div class="text-gray-400">Nacht (23-6h)</div>
+                                    <input type="number" name="profile_night_mb" value="{{ config.time_profiles[2].preload_head_mb if config.time_profiles|length > 2 else 60 }}" class="w-full bg-slate-900 border border-slate-700 rounded p-1 mt-1 text-center">
+                                    <div class="text-gray-500">MB</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tautulli Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">📊 Tautulli</h2>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" name="tautulli_enabled" class="sr-only peer" {% if config.tautulli_enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                        </label>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Tautulli URL</label>
+                            <input type="url" name="tautulli_url" value="{{ config.tautulli_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://tautulli:8181">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">API-Key</label>
+                            <input type="password" name="tautulli_api_key" value="{{ config.tautulli_api_key }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="API Key">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Top-Filme Anzahl</label>
+                                <input type="number" name="tautulli_top_movies_count" value="{{ config.tautulli_top_movies_count }}" min="1" max="50" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 mb-1">Nächste Folgen Anzahl</label>
+                                <input type="number" name="tautulli_next_episodes_count" value="{{ config.tautulli_next_episodes_count }}" min="1" max="20" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                            </div>
+                        </div>
+                        <button type="button" hx-get="/api/test-tautulli" hx-target="#tautulli-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 Verbindung testen</button>
+                        <span id="tautulli-test" class="text-xs ml-2"></span>
+                    </div>
+                </div>
+
+                <!-- Plex Section -->
+                <div class="glass rounded-xl p-6 shadow-xl mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold">🎬 Plex</h2>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" name="plex_enabled" class="sr-only peer" {% if config.plex_enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                        </label>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">Plex URL</label>
+                            <input type="url" name="plex_url" value="{{ config.plex_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://plex:32400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">X-Plex-Token</label>
+                            <input type="password" name="plex_token" value="{{ config.plex_token }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="Token">
+                        </div>
+                        <button type="button" hx-get="/api/test-plex" hx-target="#plex-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 Verbindung testen</button>
+                        <span id="plex-test" class="text-xs ml-2"></span>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="glass rounded-xl p-4 shadow-xl">
+                    <div class="flex justify-between items-center">
+                        <div id="save-msg-all" class="text-sm"></div>
+                        <button type="submit" class="bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 px-6 py-3 rounded-lg font-bold shadow-lg transition-all transform active:scale-95">
+                            💾 Alle Einstellungen speichern
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Quick Info -->
+            <div class="glass rounded-xl p-4 shadow-xl">
+                <h3 class="text-sm font-semibold text-gray-400 mb-2">ℹ️ Quick Info</h3>
+                <ul class="text-xs text-gray-500 space-y-1">
+                    <li>• Pfade gemappt auf <code class="text-blue-400">/data/...</code></li>
+                    <li>• Plex Webhook: <code class="text-blue-400">/api/webhook/plex</code></li>
+                    <li>• Config gespeichert in <code class="text-blue-400">/config/</code></li>
+                    <li>• Tautulli lädt meistgesehene Filme + nächste Folgen</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tab) {
+            document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('tab-active'));
+            document.getElementById('content-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('tab-active');
+        }
+
+        // Update stats from API
+        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+            if(evt.detail.pathInfo.requestPath === '/api/stats') {
+                const data = JSON.parse(evt.detail.xhr.response);
+                document.getElementById('ram-display').innerText = data.ram_percent + '%';
+                document.getElementById('status-text').innerText = data.status;
+
+                // Update stats
+                if(data.last_run) {
+                    document.getElementById('stat-preloaded').innerText = data.last_run.preloaded;
+                    document.getElementById('stat-skipped').innerText = data.last_run.skipped;
+                    document.getElementById('stat-duration').innerText = data.last_run.duration + 's';
+                    document.getElementById('stat-lastrun').innerText = data.last_run.last_run;
+                }
+
+                // Scheduler status
+                const schedulerEl = document.getElementById('scheduler-status');
+                if(data.scheduler_enabled && data.next_run) {
+                    schedulerEl.innerHTML = '⏰ Next: ' + data.next_run;
+                } else if(data.scheduler_enabled) {
+                    schedulerEl.innerHTML = '⏰ Scheduler active';
+                } else {
+                    schedulerEl.innerHTML = '';
+                }
+
+                // Button state
+                const btn = document.getElementById('start-btn');
+                if(data.is_running) {
+                    btn.disabled = true;
+                    btn.innerHTML = '⏳ Running...';
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '▶ Run Preloader Now';
+                }
+
+                // Auto-scroll logs
+                const logs = document.getElementById('log-container');
+                if(logs) logs.scrollTop = logs.scrollHeight;
+            }
+
+            // History rendering
+            if(evt.detail.pathInfo.requestPath === '/api/history') {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const container = document.getElementById('history-container');
+                if(data.history && data.history.length > 0) {
+                    let html = '<div class="space-y-2">';
+                    data.history.reverse().forEach(entry => {
+                        const sourceColor = {
+                            'manual': 'text-blue-400',
+                            'scheduler': 'text-purple-400',
+                            'webhook': 'text-orange-400'
+                        }[entry.source] || 'text-gray-400';
+
+                        html += `
+                            <div class="bg-slate-800/50 rounded p-3 text-sm">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-400">${entry.timestamp}</span>
+                                    <span class="${sourceColor} text-xs uppercase">${entry.source}</span>
+                                </div>
+                                <div class="flex gap-4 mt-1 text-xs">
+                                    <span class="text-emerald-400">✓ ${entry.preloaded} loaded</span>
+                                    <span class="text-blue-400">⚡ ${entry.skipped} cached</span>
+                                    <span class="text-purple-400">⏱ ${entry.duration_seconds}s</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-gray-500 text-center">No history yet</div>';
+                }
+            }
+
+            // Test connection results
+            if(evt.detail.pathInfo.requestPath === '/api/test-tautulli') {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const el = document.getElementById('tautulli-test');
+                el.innerHTML = data.status === 'success'
+                    ? '<span class="text-green-400">✓ ' + data.message + '</span>'
+                    : '<span class="text-red-400">✗ ' + data.message + '</span>';
+            }
+            if(evt.detail.pathInfo.requestPath === '/api/test-plex') {
+                const data = JSON.parse(evt.detail.xhr.response);
+                const el = document.getElementById('plex-test');
+                el.innerHTML = data.status === 'success'
+                    ? '<span class="text-green-400">✓ ' + data.message + '</span>'
+                    : '<span class="text-red-400">✗ ' + data.message + '</span>';
+            }
+        });
+    </script>
+</body>
+</html>
