@@ -91,7 +91,9 @@ TRANSLATIONS = {
         "info_paths": "Paths mapped to",
         "info_webhook": "Plex Webhook:",
         "info_config": "Config saved in",
-        "info_tautulli": "Tautulli loads most-watched movies + next episodes",
+        "info_tautulli": "Tautulli loads newest releases (movies + series)",
+        "recent_movies": "Recent Movies (by release)",
+        "recent_shows": "Recent Shows (by release)",
         "live_monitoring": "Live Monitoring",
         "live_monitoring_enabled": "Enable Live Monitoring",
         "live_check_interval": "Check Interval (seconds)",
@@ -150,21 +152,19 @@ TRANSLATIONS = {
         "loading_history": "Lade Verlauf...",
         "waiting_logs": "Warte auf Logs...",
         "api_key": "API-Key",
-        "top_movies_count": "Top-Filme Anzahl",
-        "next_episodes_count": "Nächste Folgen Anzahl",
+        "recent_movies": "Neueste Filme (nach Release)",
+        "recent_shows": "Neueste Serien (nach Release)",
         "language": "Sprache",
         "tautulli_integration": "Tautulli-Integration",
         "tautulli_url": "Tautulli URL",
         "your_api_key": "Dein API-Key",
-        "top_movies": "Top-Filme",
-        "next_episodes": "Nächste Folgen",
         "plex_integration": "Plex-Integration",
         "plex_url": "Plex URL",
         "plex_token": "X-Plex-Token",
         "info_paths": "Pfade gemappt auf",
         "info_webhook": "Plex Webhook:",
         "info_config": "Config gespeichert in",
-        "info_tautulli": "Tautulli lädt meistgesehene Filme + nächste Folgen",
+        "info_tautulli": "Tautulli lädt neueste Releases (Filme + Serien)",
         "live_monitoring": "Live-Monitoring",
         "live_monitoring_enabled": "Live-Monitoring aktivieren",
         "live_check_interval": "Prüf-Intervall (Sekunden)",
@@ -254,8 +254,8 @@ class Config(BaseModel):
     tautulli_url: str = ""
     tautulli_api_key: str = ""
     tautulli_enabled: bool = False
-    tautulli_top_movies_count: int = 10  # Top X meistgesehene Filme
-    tautulli_next_episodes_count: int = 5  # Nächste X Folgen pro Serie
+    tautulli_recent_movies_count: int = 20  # X neueste Filme (nach Release-Datum)
+    tautulli_recent_shows_count: int = 20  # X neueste Serien (nach Release-Datum)
 
     # Live-Monitoring: Echtzeit-Caching wenn jemand eine Serie schaut
     live_monitoring_enabled: bool = False
@@ -476,82 +476,103 @@ def check_file_cached(filepath: str, size_mb: int = 1) -> bool:
 
 async def fetch_tautulli_data() -> Dict[str, List[str]]:
     """
-    Holt Daten von Tautulli: Meistgesehene Filme und nächste Episoden.
+    Holt Daten von Tautulli: Neueste Filme und Serien nach Release-Datum.
 
     Returns:
-        Dict mit 'top_movies' und 'next_episodes' Pfadlisten.
+        Dict mit 'recent_movies' und 'recent_shows' Pfadlisten.
     """
-    result = {"top_movies": [], "next_episodes": []}
+    result = {"recent_movies": [], "recent_shows": []}
 
     if not config.tautulli_enabled or not config.tautulli_url or not config.tautulli_api_key:
         return result
 
     base_url = config.tautulli_url.rstrip('/')
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            # 1. Meistgesehene Filme (letzte 30 Tage)
-            movies_resp = await client.get(
+            # Hole alle Bibliotheken
+            libs_resp = await client.get(
                 f"{base_url}/api/v2",
                 params={
                     "apikey": config.tautulli_api_key,
-                    "cmd": "get_home_stats",
-                    "stat_id": "top_movies",
-                    "stats_count": config.tautulli_top_movies_count,
-                    "time_range": 30
+                    "cmd": "get_libraries"
                 }
             )
 
-            if movies_resp.status_code == 200:
-                data = movies_resp.json()
-                if data.get("response", {}).get("result") == "success":
-                    rows = data.get("response", {}).get("data", {}).get("rows", [])
-                    for movie in rows:
-                        if "file" in movie:
-                            result["top_movies"].append(movie["file"])
-                        elif "grandparent_title" in movie:
-                            # Suche Datei über Metadaten
-                            file_path = await _find_media_file(client, base_url, movie.get("rating_key"))
-                            if file_path:
-                                result["top_movies"].append(file_path)
+            if libs_resp.status_code != 200:
+                logger.warning("Tautulli: Konnte Bibliotheken nicht laden")
+                return result
 
-            # 2. Kürzlich angesehene Serien - hole nächste ungesehene Folgen
-            recently_watched_resp = await client.get(
-                f"{base_url}/api/v2",
-                params={
-                    "apikey": config.tautulli_api_key,
-                    "cmd": "get_history",
-                    "media_type": "episode",
-                    "length": 50
-                }
+            libs_data = libs_resp.json()
+            libraries = libs_data.get("response", {}).get("data", [])
+
+            # Finde Film- und Serien-Bibliotheken
+            movie_sections = [lib["section_id"] for lib in libraries if lib.get("section_type") == "movie"]
+            show_sections = [lib["section_id"] for lib in libraries if lib.get("section_type") == "show"]
+
+            # 1. Neueste Filme nach Release-Datum
+            for section_id in movie_sections:
+                movies_resp = await client.get(
+                    f"{base_url}/api/v2",
+                    params={
+                        "apikey": config.tautulli_api_key,
+                        "cmd": "get_library_media_info",
+                        "section_id": section_id,
+                        "order_column": "originally_available_at",
+                        "order_dir": "desc",
+                        "length": config.tautulli_recent_movies_count
+                    }
+                )
+
+                if movies_resp.status_code == 200:
+                    data = movies_resp.json()
+                    if data.get("response", {}).get("result") == "success":
+                        movies = data.get("response", {}).get("data", {}).get("data", [])
+                        for movie in movies:
+                            rating_key = movie.get("rating_key")
+                            if rating_key:
+                                file_path = await _find_media_file(client, base_url, rating_key)
+                                if file_path:
+                                    result["recent_movies"].append(file_path)
+
+                        if len(result["recent_movies"]) >= config.tautulli_recent_movies_count:
+                            break
+
+            # 2. Neueste Serien nach Release-Datum - erste Episode cachen
+            for section_id in show_sections:
+                shows_resp = await client.get(
+                    f"{base_url}/api/v2",
+                    params={
+                        "apikey": config.tautulli_api_key,
+                        "cmd": "get_library_media_info",
+                        "section_id": section_id,
+                        "order_column": "originally_available_at",
+                        "order_dir": "desc",
+                        "length": config.tautulli_recent_shows_count
+                    }
+                )
+
+                if shows_resp.status_code == 200:
+                    data = shows_resp.json()
+                    if data.get("response", {}).get("result") == "success":
+                        shows = data.get("response", {}).get("data", {}).get("data", [])
+                        for show in shows:
+                            show_key = show.get("rating_key")
+                            if show_key:
+                                # Hole erste Episode der Serie (S01E01)
+                                first_eps = await _find_next_episodes(
+                                    client, base_url, show_key,
+                                    last_season=0, last_episode=0, max_episodes=1
+                                )
+                                result["recent_shows"].extend(first_eps)
+
+                        if len(result["recent_shows"]) >= config.tautulli_recent_shows_count:
+                            break
+
+            logger.info(
+                f"Tautulli: {len(result['recent_movies'])} neueste Filme, "
+                f"{len(result['recent_shows'])} neueste Serien (nach Release-Datum)"
             )
-
-            if recently_watched_resp.status_code == 200:
-                data = recently_watched_resp.json()
-                if data.get("response", {}).get("result") == "success":
-                    history = data.get("response", {}).get("data", {}).get("data", [])
-
-                    # Sammle einzigartige Serien
-                    seen_shows: Dict[str, dict] = {}
-                    for entry in history:
-                        show_key = entry.get("grandparent_rating_key")
-                        if show_key and show_key not in seen_shows:
-                            seen_shows[show_key] = {
-                                "title": entry.get("grandparent_title"),
-                                "last_season": entry.get("parent_media_index", 0),
-                                "last_episode": entry.get("media_index", 0)
-                            }
-
-                    # Für jede Serie: Finde nächste Folgen
-                    for show_key, show_info in list(seen_shows.items())[:config.tautulli_next_episodes_count]:
-                        next_eps = await _find_next_episodes(
-                            client, base_url, show_key,
-                            show_info["last_season"],
-                            show_info["last_episode"]
-                        )
-                        result["next_episodes"].extend(next_eps)
-
-            logger.info(f"Tautulli: {len(result['top_movies'])} top movies, {len(result['next_episodes'])} next episodes")
 
         except Exception as e:
             logger.error(f"Tautulli API error: {e}")
@@ -1010,12 +1031,12 @@ async def run_preload(source: str = "manual"):
         # Sammle Dateien aus verschiedenen Quellen
         files_to_check: List[str] = []
 
-        # 1. Tautulli-Daten (höchste Priorität)
+        # 1. Tautulli-Daten (höchste Priorität) - Neueste Releases
         if config.tautulli_enabled:
-            state.current_action = "Fetching Tautulli data..."
+            state.current_action = "Fetching Tautulli data (newest releases)..."
             tautulli_data = await fetch_tautulli_data()
-            files_to_check.extend(tautulli_data["top_movies"])
-            files_to_check.extend(tautulli_data["next_episodes"])
+            files_to_check.extend(tautulli_data["recent_movies"])
+            files_to_check.extend(tautulli_data["recent_shows"])
 
         # 2. Plex On Deck
         if config.plex_enabled:
@@ -1454,8 +1475,8 @@ async def save_config_all(
     tautulli_enabled: bool = Form(False),
     tautulli_url: str = Form(""),
     tautulli_api_key: str = Form(""),
-    tautulli_top_movies_count: int = Form(10),
-    tautulli_next_episodes_count: int = Form(5),
+    tautulli_recent_movies_count: int = Form(20),
+    tautulli_recent_shows_count: int = Form(20),
     # Live-Monitoring
     live_monitoring_enabled: bool = Form(False),
     live_check_interval_seconds: int = Form(60),
@@ -1501,8 +1522,8 @@ async def save_config_all(
     config.tautulli_enabled = tautulli_enabled
     config.tautulli_url = tautulli_url
     config.tautulli_api_key = tautulli_api_key
-    config.tautulli_top_movies_count = tautulli_top_movies_count
-    config.tautulli_next_episodes_count = tautulli_next_episodes_count
+    config.tautulli_recent_movies_count = tautulli_recent_movies_count
+    config.tautulli_recent_shows_count = tautulli_recent_shows_count
 
     # Live-Monitoring
     old_live_monitoring = config.live_monitoring_enabled
