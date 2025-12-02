@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>VideoPreloader</Name>
+  <Repository>derbarnimer/unraid-video-preloader:latest</Repository>
+  <Registry>https://hub.docker.com/r/derbarnimer/unraid-video-preloader</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/hoktaar/unraid-video-preloader/issues</Support>
+  <Project>https://github.com/hoktaar/unraid-video-preloader</Project>
+  <Overview>
+🎬 Smart Video Preloader für Plex und Jellyfin
+
+Eliminiert Buffering beim Starten von Videos durch intelligentes Preloading in den RAM-Cache.
+
+Features:
+- Tautulli-Integration (meistgesehene Filme, nächste Folgen)
+- Plex On Deck / Weiterschauen
+- Automatischer Scheduler (Cron)
+- Zeit-Profile (Tag/Abend/Nacht)
+- Web-Interface für Konfiguration
+- Plex Webhook-Unterstützung
+- RAM-Schutz bei hoher Auslastung
+  </Overview>
+  <Category>MediaServer:Other Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/unraid-template.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/icon.png</Icon>
+  <ExtraParams>--cap-add=SYS_PTRACE</ExtraParams>
+  <DateInstalled></DateInstalled>
+  <Description>
+🎬 Smart Video Preloader für Plex und Jellyfin - Eliminiert Buffering durch intelligentes RAM-Caching.
+  </Description>
+  <Config Name="WebUI Port" Target="8000" Default="8080" Mode="tcp" Description="Port für das Web-Interface" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/video-preloader" Mode="rw" Description="Speicherort für Konfigurationsdateien" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/video-preloader</Config>
+  <Config Name="Media" Target="/data" Default="/mnt/user" Mode="ro" Description="Deine Medienbibliothek (nur Lesezugriff)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID für Dateiberechtigungen" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID für Dateiberechtigungen" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="Timezone" Target="TZ" Default="Europe/Berlin" Mode="" Description="Zeitzone für Logs und Scheduler" Type="Variable" Display="always" Required="false" Mask="false">Europe/Berlin</Config>
+</Container>
+
