@@ -28,7 +28,7 @@ Features:
   </Overview>
   <Category>MediaServer:Other Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/unraid-template.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/video-preloader.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/hoktaar/unraid-video-preloader/main/icon.png</Icon>
   <ExtraParams>--cap-add=SYS_PTRACE</ExtraParams>
   <DateInstalled></DateInstalled>
