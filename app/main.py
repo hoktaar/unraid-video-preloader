@@ -529,7 +529,11 @@ async def fetch_tautulli_data() -> Dict[str, List[str]]:
 
 
 async def _find_media_file(client: httpx.AsyncClient, base_url: str, rating_key: str) -> Optional[str]:
-    """Findet den Dateipfad für ein Medium über rating_key."""
+    """
+    Findet den Dateipfad für ein Medium über rating_key.
+
+    Konvertiert Plex-Pfade zu Container-Pfaden falls nötig.
+    """
     try:
         resp = await client.get(
             f"{base_url}/api/v2",
@@ -542,6 +546,9 @@ async def _find_media_file(client: httpx.AsyncClient, base_url: str, rating_key:
         if resp.status_code == 200:
             data = resp.json()
             metadata = data.get("response", {}).get("data", {})
+
+            file_path = None
+
             # Prüfe verschiedene Pfad-Felder
             for field in ["file", "file_path", "media_info"]:
                 if field in metadata:
@@ -549,9 +556,36 @@ async def _find_media_file(client: httpx.AsyncClient, base_url: str, rating_key:
                         for media in metadata[field]:
                             for part in media.get("parts", []):
                                 if "file" in part:
-                                    return part["file"]
+                                    file_path = part["file"]
+                                    break
+                            if file_path:
+                                break
                     else:
-                        return metadata[field]
+                        file_path = metadata[field]
+                    if file_path:
+                        break
+
+            if file_path:
+                # Konvertiere Plex-Pfad zu Container-Pfad
+                # z.B. /media/tv/... → /data/tv/...
+                original_path = file_path
+
+                # Prüfe ob der Pfad existiert
+                if os.path.exists(file_path):
+                    return file_path
+
+                # Versuche Pfad-Mapping
+                for video_path in config.video_paths:
+                    # Extrahiere den relativen Teil des Pfads
+                    path_parts = file_path.replace('\\', '/').split('/')
+                    for i in range(len(path_parts)):
+                        test_path = os.path.join(video_path, *path_parts[i:])
+                        if os.path.exists(test_path):
+                            logger.debug(f"Pfad gemappt: {original_path} -> {test_path}")
+                            return test_path
+
+                logger.debug(f"Pfad nicht gefunden: {file_path}")
+
     except Exception as e:
         logger.debug(f"Could not find file for rating_key {rating_key}: {e}")
     return None
@@ -562,12 +596,29 @@ async def _find_next_episodes(
     base_url: str,
     show_key: str,
     last_season: int,
-    last_episode: int
+    last_episode: int,
+    max_episodes: int = 3
 ) -> List[str]:
-    """Findet die nächsten ungesehenen Episoden einer Serie."""
+    """
+    Findet die nächsten ungesehenen Episoden einer Serie.
+
+    Args:
+        client: HTTP Client
+        base_url: Tautulli Base URL
+        show_key: Rating Key der Serie
+        last_season: Aktuelle Staffelnummer
+        last_episode: Aktuelle Episodennummer
+        max_episodes: Maximale Anzahl zu findender Episoden
+
+    Returns:
+        Liste der Dateipfade für nächste Episoden
+    """
     episodes = []
+
+    logger.debug(f"Suche nächste Episoden: show_key={show_key}, S{last_season:02d}E{last_episode:02d}")
+
     try:
-        # Hole alle Episoden der Serie
+        # Hole alle Staffeln der Serie
         resp = await client.get(
             f"{base_url}/api/v2",
             params={
@@ -577,42 +628,61 @@ async def _find_next_episodes(
             }
         )
 
-        if resp.status_code == 200:
-            data = resp.json()
-            seasons = data.get("response", {}).get("data", {}).get("children_list", [])
+        if resp.status_code != 200:
+            logger.warning(f"Tautulli API Fehler: Status {resp.status_code}")
+            return episodes
 
-            for season in seasons:
-                season_num = season.get("media_index", 0)
-                if season_num < last_season:
+        data = resp.json()
+
+        if data.get("response", {}).get("result") != "success":
+            logger.warning(f"Tautulli API Fehler: {data.get('response', {}).get('message', 'Unknown')}")
+            return episodes
+
+        seasons = data.get("response", {}).get("data", {}).get("children_list", [])
+        logger.debug(f"Gefundene Staffeln: {len(seasons)}")
+
+        for season in seasons:
+            season_num = season.get("media_index", 0)
+
+            # Überspringe frühere Staffeln
+            if season_num < last_season:
+                continue
+
+            # Hole Episoden dieser Staffel
+            season_key = season.get("rating_key")
+            season_resp = await client.get(
+                f"{base_url}/api/v2",
+                params={
+                    "apikey": config.tautulli_api_key,
+                    "cmd": "get_children_metadata",
+                    "rating_key": season_key
+                }
+            )
+
+            if season_resp.status_code != 200:
+                continue
+
+            ep_data = season_resp.json()
+            eps = ep_data.get("response", {}).get("data", {}).get("children_list", [])
+            logger.debug(f"Staffel {season_num}: {len(eps)} Episoden")
+
+            for ep in eps:
+                ep_num = ep.get("media_index", 0)
+
+                # Nur Folgen nach der aktuell geschauten
+                if season_num == last_season and ep_num <= last_episode:
                     continue
 
-                # Hole Episoden dieser Staffel
-                season_resp = await client.get(
-                    f"{base_url}/api/v2",
-                    params={
-                        "apikey": config.tautulli_api_key,
-                        "cmd": "get_children_metadata",
-                        "rating_key": season.get("rating_key")
-                    }
-                )
+                # Finde Dateipfad
+                file_path = await _find_media_file(client, base_url, ep.get("rating_key"))
+                if file_path:
+                    logger.debug(f"Gefunden: S{season_num:02d}E{ep_num:02d} -> {file_path}")
+                    episodes.append(file_path)
+                    if len(episodes) >= max_episodes:
+                        return episodes
 
-                if season_resp.status_code == 200:
-                    ep_data = season_resp.json()
-                    eps = ep_data.get("response", {}).get("data", {}).get("children_list", [])
-
-                    for ep in eps:
-                        ep_num = ep.get("media_index", 0)
-                        # Nur Folgen nach der zuletzt gesehenen
-                        if season_num == last_season and ep_num <= last_episode:
-                            continue
-
-                        file_path = await _find_media_file(client, base_url, ep.get("rating_key"))
-                        if file_path:
-                            episodes.append(file_path)
-                            if len(episodes) >= 3:  # Max 3 nächste Folgen pro Serie
-                                return episodes
     except Exception as e:
-        logger.debug(f"Error finding next episodes: {e}")
+        logger.warning(f"Fehler beim Finden nächster Episoden: {e}")
 
     return episodes
 
@@ -714,8 +784,13 @@ async def preload_next_episodes_for_session(session: Dict[str, Any]) -> int:
                     read_file_chunk(filepath, config.preload_tail_mb, offset_from_end=True)
                     loaded_count += 1
 
+            if not next_eps:
+                logger.info(f"Live-Monitoring: Keine nächsten Episoden gefunden für '{session['show_title']}'")
+            else:
+                logger.info(f"Live-Monitoring: {len(next_eps)} Episoden gefunden für '{session['show_title']}'")
+
         except Exception as e:
-            logger.debug(f"Error preloading next episodes: {e}")
+            logger.warning(f"Live-Monitoring Error: {e}")
 
     return loaded_count
 
@@ -1451,3 +1526,69 @@ async def test_plex():
         return JSONResponse({"status": "error", "message": f"HTTP {resp.status_code}"})
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.get("/api/test-live-monitoring")
+async def test_live_monitoring():
+    """
+    Testet das Live-Monitoring und zeigt aktive Streams.
+
+    Gibt detaillierte Infos zurück für Debugging.
+    """
+    if not config.tautulli_enabled:
+        return JSONResponse({
+            "status": "error",
+            "message": "Tautulli nicht aktiviert"
+        })
+
+    if not config.live_monitoring_enabled:
+        return JSONResponse({
+            "status": "warning",
+            "message": "Live-Monitoring ist deaktiviert"
+        })
+
+    try:
+        # Hole aktive Sessions
+        sessions = await fetch_current_activity()
+
+        if not sessions:
+            return JSONResponse({
+                "status": "info",
+                "message": "Keine aktiven Serien-Streams",
+                "sessions": []
+            })
+
+        # Für jede Session: Finde nächste Episoden
+        results = []
+        for session in sessions:
+            base_url = config.tautulli_url.rstrip('/')
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                next_eps = await _find_next_episodes(
+                    client,
+                    base_url,
+                    session["show_key"],
+                    session["season"],
+                    session["episode"],
+                    max_episodes=config.live_episodes_to_preload
+                )
+
+            results.append({
+                "show": session["show_title"],
+                "current": f"S{session['season']:02d}E{session['episode']:02d}",
+                "user": session["user"],
+                "next_episodes_found": len(next_eps),
+                "next_episodes": [os.path.basename(p) for p in next_eps],
+                "paths_exist": [os.path.exists(p) for p in next_eps]
+            })
+
+        return JSONResponse({
+            "status": "success",
+            "message": f"{len(sessions)} aktive Serien-Streams gefunden",
+            "sessions": results
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "message": str(e)
+        })
