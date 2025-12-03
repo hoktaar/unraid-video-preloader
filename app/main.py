@@ -1649,10 +1649,57 @@ async def get_logs():
 
 @app.get("/api/history")
 async def get_history():
-    """Gibt die Preload-Historie zurück."""
-    return JSONResponse({
-        "history": [entry.model_dump() for entry in state.history[-20:]]
-    })
+    """
+    Gibt die Preload-Historie als formatiertes HTML zurück.
+
+    Returns:
+        HTMLResponse mit formatierten History-Karten.
+    """
+    lang = config.language if config.language in TRANSLATIONS else "en"
+    t = TRANSLATIONS[lang]
+    entries = state.history[-10:][::-1]  # Letzte 10, neueste zuerst
+
+    if not entries:
+        return HTMLResponse(f'<p class="text-gray-500 text-sm">{t.get("no_history", "No history yet")}</p>')
+
+    html_parts = []
+    for entry in entries:
+        # Zeitstempel formatieren
+        timestamp = entry.timestamp
+        # Source-Label übersetzen
+        source_labels = {
+            "manual": "🖱️ Manual",
+            "scheduler": "⏰ Scheduler",
+            "live_monitoring": "📡 Live",
+            "webhook": "🎬 Webhook",
+            "tautulli": "📺 Tautulli"
+        }
+        source_label = source_labels.get(entry.source, f"📁 {entry.source}")
+
+        # Dateien formatieren (max 5 anzeigen)
+        files_preview = ""
+        if entry.files_processed:
+            file_names = [os.path.basename(f) for f in entry.files_processed[:5]]
+            files_preview = ", ".join(file_names)
+            if len(entry.files_processed) > 5:
+                files_preview += f" (+{len(entry.files_processed) - 5})"
+
+        html_parts.append(f'''
+        <div class="bg-slate-800/50 rounded-lg p-3 mb-2">
+            <div class="flex justify-between items-start mb-1">
+                <span class="text-xs text-gray-400">{timestamp}</span>
+                <span class="text-xs px-2 py-0.5 bg-slate-700 rounded">{source_label}</span>
+            </div>
+            <div class="flex gap-4 text-sm">
+                <span class="text-green-400">✓ {entry.preloaded} {t.get("preloaded", "loaded")}</span>
+                <span class="text-yellow-400">⏭ {entry.skipped} {t.get("skipped", "cached")}</span>
+                <span class="text-gray-400">⏱ {entry.duration_seconds}s</span>
+            </div>
+            {f'<p class="text-xs text-gray-500 mt-1 truncate">{files_preview}</p>' if files_preview else ''}
+        </div>
+        ''')
+
+    return HTMLResponse("".join(html_parts))
 
 
 @app.post("/start")
