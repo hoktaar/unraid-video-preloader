@@ -142,6 +142,48 @@
         </div>
     </div>
 
+    <!-- API Keys -->
+    <div class="glass rounded-xl p-6 shadow-xl">
+        <h3 class="text-xl font-semibold mb-4">🔑 API-Keys finden</h3>
+
+        <!-- Tautulli API Key -->
+        <div class="mb-6">
+            <h4 class="font-semibold text-emerald-400 mb-3">📺 Tautulli API-Key</h4>
+            <div class="bg-slate-900/50 p-4 rounded-lg space-y-2 text-sm text-gray-300">
+                <p><strong>1.</strong> Öffne Tautulli im Browser</p>
+                <p><strong>2.</strong> Gehe zu <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">⚙️ Settings</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Web Interface</span></p>
+                <p><strong>3.</strong> Scrolle runter zu <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">API Key</span></p>
+                <p><strong>4.</strong> Kopiere den Key (oder klicke "Show" um ihn anzuzeigen)</p>
+                <div class="mt-3 p-2 bg-blue-900/30 border border-blue-800 rounded text-xs">
+                    💡 <strong>Tipp:</strong> Falls kein Key vorhanden, klicke auf "Generate" um einen neuen zu erstellen.
+                </div>
+            </div>
+        </div>
+
+        <!-- Plex Token -->
+        <div>
+            <h4 class="font-semibold text-yellow-400 mb-3">🎬 Plex Token (X-Plex-Token)</h4>
+            <div class="bg-slate-900/50 p-4 rounded-lg space-y-2 text-sm text-gray-300">
+                <p class="font-semibold text-white mb-2">Methode 1: Über Browser (einfach)</p>
+                <p><strong>1.</strong> Öffne Plex Web App und spiele irgendein Medium ab</p>
+                <p><strong>2.</strong> Klicke auf <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">...</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Get Info</span></p>
+                <p><strong>3.</strong> Klicke auf <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">View XML</span></p>
+                <p><strong>4.</strong> In der URL siehst du: <span class="font-mono text-green-400">...?X-Plex-Token=DEIN_TOKEN</span></p>
+
+                <div class="border-t border-slate-700 my-4"></div>
+
+                <p class="font-semibold text-white mb-2">Methode 2: Über Plex Account</p>
+                <p><strong>1.</strong> Gehe zu <a href="https://plex.tv/devices.xml" target="_blank" class="text-blue-400 hover:underline">plex.tv/devices.xml</a></p>
+                <p><strong>2.</strong> Logge dich ein (falls nicht eingeloggt)</p>
+                <p><strong>3.</strong> Suche in der XML nach <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">token="..."</span></p>
+
+                <div class="mt-3 p-2 bg-yellow-900/30 border border-yellow-800 rounded text-xs">
+                    ⚠️ <strong>Wichtig:</strong> Teile deinen Token niemals öffentlich! Er gibt vollen Zugriff auf deinen Plex Server.
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
