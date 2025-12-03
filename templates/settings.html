@@ -27,12 +27,12 @@
             <div class="glass rounded-xl p-6 shadow-xl">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold">📁 {{ t.paths }}</h3>
-                    <button type="button" onclick="toggleHelp('paths-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ Hilfe</button>
+                    <button type="button" onclick="toggleHelp('paths-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ {{ t.help }}</button>
                 </div>
                 <div id="paths-help" class="hidden mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-gray-300">
-                    <p><strong>Video Paths:</strong> Pfade zu deinen Medien (kommasepariert)</p>
-                    <p class="mt-2"><strong>Priority Paths:</strong> Diese werden zuerst geladen</p>
-                    <p class="mt-2"><strong>Exclude Patterns:</strong> Ordner die übersprungen werden (z.B. */Samples/*)</p>
+                    <p><strong>Video Paths:</strong> {{ t.help_paths_video }}</p>
+                    <p class="mt-2"><strong>Priority Paths:</strong> {{ t.help_paths_priority }}</p>
+                    <p class="mt-2"><strong>Exclude Patterns:</strong> {{ t.help_paths_exclude }}</p>
                 </div>
                 <div class="space-y-4">
                     <div>
@@ -54,12 +54,12 @@
             <div class="glass rounded-xl p-6 shadow-xl">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold">⚡ {{ t.preload_settings }}</h3>
-                    <button type="button" onclick="toggleHelp('preload-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ Hilfe</button>
+                    <button type="button" onclick="toggleHelp('preload-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ {{ t.help }}</button>
                 </div>
                 <div id="preload-help" class="hidden mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-gray-300">
-                    <p><strong>Head Preload:</strong> Wie viel MB vom Anfang der Datei geladen wird (für schnellen Start)</p>
-                    <p class="mt-2"><strong>Tail Preload:</strong> MB vom Ende (für Seek-Vorschau)</p>
-                    <p class="mt-2"><strong>Cache Threshold:</strong> Dateien mit Lesezeit unter diesem Wert gelten als gecached</p>
+                    <p><strong>Head Preload:</strong> {{ t.help_preload_head }}</p>
+                    <p class="mt-2"><strong>Tail Preload:</strong> {{ t.help_preload_tail }}</p>
+                    <p class="mt-2"><strong>Cache Threshold:</strong> {{ t.help_preload_threshold }}</p>
                 </div>
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">

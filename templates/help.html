@@ -2,18 +2,17 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
-    
+
     <div class="glass rounded-xl p-6 shadow-xl">
         <h2 class="text-2xl font-bold mb-4">🎬 Unraid Video Preloader</h2>
         <p class="text-gray-300 mb-4">
-            Der Video Preloader lädt strategisch wichtige Teile von Videodateien in den RAM-Cache, 
-            um sofortiges Starten ohne Buffering zu ermöglichen - perfekt für Plex/Jellyfin auf Unraid.
+            {{ t.help_intro }}
         </p>
         <div class="flex gap-4">
             <a href="https://github.com/hoktaar/unraid-video-preloader" target="_blank" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
                 📖 GitHub Repository
             </a>
-            <a href="https://hub.docker.com/r/hoktaar/unraid-video-preloader" target="_blank" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
+            <a href="https://hub.docker.com/r/derbarnimer/unraid-video-preloader" target="_blank" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
                 🐳 Docker Hub
             </a>
         </div>
@@ -21,27 +20,27 @@
 
     <!-- How it works -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">⚙️ Wie funktioniert es?</h3>
+        <h3 class="text-xl font-semibold mb-4">⚙️ {{ t.help_how_title }}</h3>
         <div class="space-y-4 text-gray-300">
             <div class="flex gap-4">
                 <div class="text-2xl">1️⃣</div>
                 <div>
-                    <h4 class="font-semibold text-white">Dateien scannen</h4>
-                    <p class="text-sm">Der Preloader durchsucht die konfigurierten Pfade nach Videodateien.</p>
+                    <h4 class="font-semibold text-white">{{ t.help_step1_title }}</h4>
+                    <p class="text-sm">{{ t.help_step1_desc }}</p>
                 </div>
             </div>
             <div class="flex gap-4">
                 <div class="text-2xl">2️⃣</div>
                 <div>
-                    <h4 class="font-semibold text-white">Strategisch laden</h4>
-                    <p class="text-sm">Die ersten MB (Head) und letzten MB (Tail) jeder Datei werden in den RAM geladen.</p>
+                    <h4 class="font-semibold text-white">{{ t.help_step2_title }}</h4>
+                    <p class="text-sm">{{ t.help_step2_desc }}</p>
                 </div>
             </div>
             <div class="flex gap-4">
                 <div class="text-2xl">3️⃣</div>
                 <div>
-                    <h4 class="font-semibold text-white">Sofort abspielen</h4>
-                    <p class="text-sm">Videos starten sofort ohne Buffering, da die wichtigen Teile bereits im RAM sind.</p>
+                    <h4 class="font-semibold text-white">{{ t.help_step3_title }}</h4>
+                    <p class="text-sm">{{ t.help_step3_desc }}</p>
                 </div>
             </div>
         </div>
@@ -49,93 +48,93 @@
 
     <!-- Features -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">🚀 Features</h3>
+        <h3 class="text-xl font-semibold mb-4">🚀 {{ t.help_features_title }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="bg-slate-800/50 p-4 rounded-lg">
-                <h4 class="font-semibold text-emerald-400 mb-2">📺 Tautulli Integration</h4>
-                <p class="text-sm text-gray-400">Cached automatisch die beliebtesten Filme und neuesten Serien basierend auf Wiedergabestatistiken.</p>
+                <h4 class="font-semibold text-emerald-400 mb-2">📺 {{ t.tautulli_integration }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_feat_tautulli }}</p>
             </div>
             <div class="bg-slate-800/50 p-4 rounded-lg">
-                <h4 class="font-semibold text-blue-400 mb-2">📡 Live-Monitoring</h4>
-                <p class="text-sm text-gray-400">Erkennt aktive Serien-Streams und lädt automatisch die nächsten Episoden vor.</p>
+                <h4 class="font-semibold text-blue-400 mb-2">📡 {{ t.live_monitoring }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_feat_live }}</p>
             </div>
             <div class="bg-slate-800/50 p-4 rounded-lg">
-                <h4 class="font-semibold text-purple-400 mb-2">⏰ Auto-Scheduler</h4>
-                <p class="text-sm text-gray-400">Führt Preloads automatisch nach Zeitplan aus (Cron-Format).</p>
+                <h4 class="font-semibold text-purple-400 mb-2">⏰ {{ t.auto_scheduler }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_feat_scheduler }}</p>
             </div>
             <div class="bg-slate-800/50 p-4 rounded-lg">
-                <h4 class="font-semibold text-yellow-400 mb-2">🎬 Plex Webhook</h4>
-                <p class="text-sm text-gray-400">Reagiert auf Plex-Events und cached Medien bei Bedarf.</p>
+                <h4 class="font-semibold text-yellow-400 mb-2">🎬 {{ t.plex_webhook }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_feat_plex }}</p>
             </div>
         </div>
     </div>
 
     <!-- Caching Strategies -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">📊 Caching-Strategien</h3>
+        <h3 class="text-xl font-semibold mb-4">📊 {{ t.help_strategies_title }}</h3>
         <div class="space-y-4">
             <div class="border-l-4 border-green-500 pl-4">
-                <h4 class="font-semibold text-white">📅 Neueste Releases</h4>
-                <p class="text-sm text-gray-400">Filme und Serien sortiert nach Erscheinungsdatum. Ideal für neue Blockbuster und aktuelle Serien.</p>
+                <h4 class="font-semibold text-white">📅 {{ t.recent_releases }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_strat_recent }}</p>
             </div>
             <div class="border-l-4 border-blue-500 pl-4">
-                <h4 class="font-semibold text-white">👀 Meistgesehen</h4>
-                <p class="text-sm text-gray-400">Die beliebtesten Inhalte der letzten 30 Tage. Perfekt für Dauerbrenner und Lieblingsfilme.</p>
+                <h4 class="font-semibold text-white">👀 {{ t.most_watched }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_strat_watched }}</p>
             </div>
             <div class="border-l-4 border-purple-500 pl-4">
-                <h4 class="font-semibold text-white">➕ Zuletzt hinzugefügt</h4>
-                <p class="text-sm text-gray-400">Frisch zur Bibliothek hinzugefügte Inhalte. Für neue Downloads.</p>
+                <h4 class="font-semibold text-white">➕ {{ t.recently_added }}</h4>
+                <p class="text-sm text-gray-400">{{ t.help_strat_added }}</p>
             </div>
         </div>
     </div>
 
     <!-- Path Mappings -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">🔄 Pfad-Mappings</h3>
+        <h3 class="text-xl font-semibold mb-4">🔄 {{ t.help_mappings_title }}</h3>
         <p class="text-gray-300 mb-4">
-            Wenn Plex/Tautulli andere Pfade sieht als der Container, musst du Mappings konfigurieren:
+            {{ t.help_mappings_desc }}
         </p>
         <div class="bg-slate-900/50 p-4 rounded-lg font-mono text-sm">
-            <p class="text-gray-400"># Format: plex_pfad:container_pfad</p>
+            <p class="text-gray-400"># Format: plex_path:container_path</p>
             <p class="text-green-400">/media/tv:/data/tv</p>
             <p class="text-green-400">/media/movies:/data/movies</p>
         </div>
         <p class="text-xs text-gray-500 mt-2">
-            Tipp: Schau in die Logs nach "⚠️ Pfad nicht gefunden" um die richtigen Mappings zu finden.
+            {{ t.help_mappings_tip }}
         </p>
     </div>
 
     <!-- Troubleshooting -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">🔧 Troubleshooting</h3>
+        <h3 class="text-xl font-semibold mb-4">🔧 {{ t.help_troubleshoot_title }}</h3>
         <div class="space-y-3">
             <details class="bg-slate-800/50 rounded-lg">
-                <summary class="p-3 cursor-pointer font-semibold">Dateien werden nicht gecached</summary>
+                <summary class="p-3 cursor-pointer font-semibold">{{ t.help_ts_nocache_title }}</summary>
                 <div class="p-3 pt-0 text-sm text-gray-400">
                     <ul class="list-disc list-inside space-y-1">
-                        <li>Prüfe ob die Pfade korrekt gemountet sind</li>
-                        <li>Stelle sicher, dass die Dateien größer als "Min. File Size" sind</li>
-                        <li>Prüfe die RAM-Auslastung (zu hoch = keine neuen Dateien)</li>
+                        <li>{{ t.help_ts_nocache_1 }}</li>
+                        <li>{{ t.help_ts_nocache_2 }}</li>
+                        <li>{{ t.help_ts_nocache_3 }}</li>
                     </ul>
                 </div>
             </details>
             <details class="bg-slate-800/50 rounded-lg">
-                <summary class="p-3 cursor-pointer font-semibold">Live-Monitoring findet keine Episoden</summary>
+                <summary class="p-3 cursor-pointer font-semibold">{{ t.help_ts_live_title }}</summary>
                 <div class="p-3 pt-0 text-sm text-gray-400">
                     <ul class="list-disc list-inside space-y-1">
-                        <li>Konfiguriere Pfad-Mappings (Plex-Pfade ≠ Container-Pfade)</li>
-                        <li>Prüfe ob Tautulli API-Key korrekt ist</li>
-                        <li>Teste mit "/api/test-live-monitoring"</li>
+                        <li>{{ t.help_ts_live_1 }}</li>
+                        <li>{{ t.help_ts_live_2 }}</li>
+                        <li>{{ t.help_ts_live_3 }}</li>
                     </ul>
                 </div>
             </details>
             <details class="bg-slate-800/50 rounded-lg">
-                <summary class="p-3 cursor-pointer font-semibold">Tautulli-Verbindung schlägt fehl</summary>
+                <summary class="p-3 cursor-pointer font-semibold">{{ t.help_ts_tautulli_title }}</summary>
                 <div class="p-3 pt-0 text-sm text-gray-400">
                     <ul class="list-disc list-inside space-y-1">
-                        <li>Prüfe die Tautulli URL (inkl. Port, z.B. http://tautulli:8181)</li>
-                        <li>API-Key findest du in Tautulli → Settings → Web Interface</li>
-                        <li>Stelle sicher, dass Container sich erreichen können (gleiche Docker Network)</li>
+                        <li>{{ t.help_ts_tautulli_1 }}</li>
+                        <li>{{ t.help_ts_tautulli_2 }}</li>
+                        <li>{{ t.help_ts_tautulli_3 }}</li>
                     </ul>
                 </div>
             </details>
@@ -144,41 +143,41 @@
 
     <!-- API Keys -->
     <div class="glass rounded-xl p-6 shadow-xl">
-        <h3 class="text-xl font-semibold mb-4">🔑 API-Keys finden</h3>
+        <h3 class="text-xl font-semibold mb-4">🔑 {{ t.help_apikeys_title }}</h3>
 
         <!-- Tautulli API Key -->
         <div class="mb-6">
-            <h4 class="font-semibold text-emerald-400 mb-3">📺 Tautulli API-Key</h4>
+            <h4 class="font-semibold text-emerald-400 mb-3">📺 {{ t.help_tautulli_key_title }}</h4>
             <div class="bg-slate-900/50 p-4 rounded-lg space-y-2 text-sm text-gray-300">
-                <p><strong>1.</strong> Öffne Tautulli im Browser</p>
-                <p><strong>2.</strong> Gehe zu <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">⚙️ Settings</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Web Interface</span></p>
-                <p><strong>3.</strong> Scrolle runter zu <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">API Key</span></p>
-                <p><strong>4.</strong> Kopiere den Key (oder klicke "Show" um ihn anzuzeigen)</p>
+                <p><strong>1.</strong> {{ t.help_tautulli_key_1 }}</p>
+                <p><strong>2.</strong> {{ t.help_tautulli_key_2 }} <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">⚙️ Settings</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Web Interface</span></p>
+                <p><strong>3.</strong> {{ t.help_tautulli_key_3 }} <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">API Key</span></p>
+                <p><strong>4.</strong> {{ t.help_tautulli_key_4 }}</p>
                 <div class="mt-3 p-2 bg-blue-900/30 border border-blue-800 rounded text-xs">
-                    💡 <strong>Tipp:</strong> Falls kein Key vorhanden, klicke auf "Generate" um einen neuen zu erstellen.
+                    💡 <strong>Tip:</strong> {{ t.help_tautulli_key_tip }}
                 </div>
             </div>
         </div>
 
         <!-- Plex Token -->
         <div>
-            <h4 class="font-semibold text-yellow-400 mb-3">🎬 Plex Token (X-Plex-Token)</h4>
+            <h4 class="font-semibold text-yellow-400 mb-3">🎬 {{ t.help_plex_token_title }}</h4>
             <div class="bg-slate-900/50 p-4 rounded-lg space-y-2 text-sm text-gray-300">
-                <p class="font-semibold text-white mb-2">Methode 1: Über Browser (einfach)</p>
-                <p><strong>1.</strong> Öffne Plex Web App und spiele irgendein Medium ab</p>
-                <p><strong>2.</strong> Klicke auf <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">...</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Get Info</span></p>
-                <p><strong>3.</strong> Klicke auf <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">View XML</span></p>
-                <p><strong>4.</strong> In der URL siehst du: <span class="font-mono text-green-400">...?X-Plex-Token=DEIN_TOKEN</span></p>
+                <p class="font-semibold text-white mb-2">{{ t.help_plex_method1 }}</p>
+                <p><strong>1.</strong> {{ t.help_plex_method1_1 }}</p>
+                <p><strong>2.</strong> {{ t.help_plex_method1_2 }} <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">...</span> → <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">Get Info</span></p>
+                <p><strong>3.</strong> {{ t.help_plex_method1_3 }} <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">View XML</span></p>
+                <p><strong>4.</strong> {{ t.help_plex_method1_4 }} <span class="font-mono text-green-400">...?X-Plex-Token=YOUR_TOKEN</span></p>
 
                 <div class="border-t border-slate-700 my-4"></div>
 
-                <p class="font-semibold text-white mb-2">Methode 2: Über Plex Account</p>
-                <p><strong>1.</strong> Gehe zu <a href="https://plex.tv/devices.xml" target="_blank" class="text-blue-400 hover:underline">plex.tv/devices.xml</a></p>
-                <p><strong>2.</strong> Logge dich ein (falls nicht eingeloggt)</p>
-                <p><strong>3.</strong> Suche in der XML nach <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">token="..."</span></p>
+                <p class="font-semibold text-white mb-2">{{ t.help_plex_method2 }}</p>
+                <p><strong>1.</strong> {{ t.help_plex_method2_1 }} <a href="https://plex.tv/devices.xml" target="_blank" class="text-blue-400 hover:underline">plex.tv/devices.xml</a></p>
+                <p><strong>2.</strong> {{ t.help_plex_method2_2 }}</p>
+                <p><strong>3.</strong> {{ t.help_plex_method2_3 }} <span class="font-mono bg-slate-800 px-2 py-0.5 rounded">token="..."</span></p>
 
                 <div class="mt-3 p-2 bg-yellow-900/30 border border-yellow-800 rounded text-xs">
-                    ⚠️ <strong>Wichtig:</strong> Teile deinen Token niemals öffentlich! Er gibt vollen Zugriff auf deinen Plex Server.
+                    ⚠️ <strong>Warning:</strong> {{ t.help_plex_token_warning }}
                 </div>
             </div>
         </div>
