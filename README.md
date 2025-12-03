@@ -34,6 +34,8 @@ Unraid Video Preloader is a Docker application that intelligently preloads video
 - **Web Interface** - Beautiful UI for configuration and monitoring
 - **Plex Webhooks** - React to play events in real-time
 - **RAM Protection** - Automatically stops when RAM usage is high
+- **Multi-Language** - Full English and German interface support
+- **Path Mappings** - Configure path translations between Plex and container
 
 ### 🚀 Quick Start
 
@@ -98,6 +100,8 @@ When enabled, the preloader monitors active Tautulli streams every 60 seconds. I
 | `/api/webhook/plex` | POST | Receive Plex webhooks |
 | `/api/test-tautulli` | GET | Test Tautulli connection |
 | `/api/test-plex` | GET | Test Plex connection |
+| `/api/test-live-monitoring` | GET | Test live monitoring detection |
+| `/api/set-language` | GET | Switch UI language (en/de) |
 
 ### 📡 Plex Webhook Setup
 
@@ -127,6 +131,8 @@ Unraid Video Preloader ist eine Docker-Anwendung, die Video-Dateien intelligent 
 - **Web-Interface** - Schöne UI für Konfiguration und Monitoring
 - **Plex Webhooks** - Reagiert in Echtzeit auf Wiedergabe-Events
 - **RAM-Schutz** - Stoppt automatisch bei hoher RAM-Auslastung
+- **Mehrsprachig** - Vollständige Deutsch/Englisch-Unterstützung
+- **Pfad-Mappings** - Pfadübersetzung zwischen Plex und Container konfigurieren
 
 ### 🚀 Schnellstart
 
@@ -191,6 +197,8 @@ Wenn aktiviert, prüft der Preloader alle 60 Sekunden aktive Tautulli-Streams. W
 | `/api/webhook/plex` | POST | Plex-Webhooks empfangen |
 | `/api/test-tautulli` | GET | Tautulli-Verbindung testen |
 | `/api/test-plex` | GET | Plex-Verbindung testen |
+| `/api/test-live-monitoring` | GET | Live-Monitoring-Erkennung testen |
+| `/api/set-language` | GET | UI-Sprache wechseln (en/de) |
 
 ### 📡 Plex Webhook einrichten
 
