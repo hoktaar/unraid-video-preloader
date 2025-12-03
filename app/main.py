@@ -1733,8 +1733,13 @@ async def save_config_all(
             logger.info("Live-Monitoring gestoppt")
 
     logger.info(f"All config saved: {len(config.video_paths)} paths, scheduler={'on' if scheduler_enabled else 'off'}, live-monitoring={'on' if live_monitoring_enabled else 'off'}")
-    msg = "✓ Settings saved!" if language == "en" else "✓ Einstellungen gespeichert!"
-    return HTMLResponse(f'<span class="text-green-500">{msg}</span>')
+
+    # Redirect zurück zur Settings-Seite (für Sprachwechsel)
+    return HTMLResponse(
+        content="",
+        status_code=200,
+        headers={"HX-Redirect": "/settings"}
+    )
 
 
 @app.get("/api/test-tautulli")

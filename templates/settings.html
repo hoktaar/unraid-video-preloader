@@ -1,19 +1,21 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form hx-post="/save_config_all" hx-swap="none" class="space-y-6">
-    
+<form id="settings-form" hx-post="/save_config_all" hx-swap="none" class="space-y-6">
+
     <!-- Save Button (Sticky) -->
     <div class="sticky top-0 z-10 glass rounded-xl p-4 shadow-xl flex justify-between items-center">
         <h2 class="text-xl font-semibold">⚙️ {{ t.nav_settings }}</h2>
         <div class="flex items-center gap-4">
-            <select name="language" class="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm" onchange="this.form.submit()">
+            <select name="language" id="language-select" class="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm"
+                    hx-post="/save_config_all" hx-trigger="change" hx-include="#settings-form" hx-swap="none">
                 <option value="en" {% if config.language == 'en' %}selected{% endif %}>🇬🇧 English</option>
                 <option value="de" {% if config.language == 'de' %}selected{% endif %}>🇩🇪 Deutsch</option>
             </select>
             <button type="submit" class="px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg font-medium transition-all">
                 💾 {{ t.save_all }}
             </button>
+            <span id="save-status" class="text-sm"></span>
         </div>
     </div>
 
