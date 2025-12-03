@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 import httpx
 import psutil
 from fastapi import FastAPI, Request, BackgroundTasks, Form, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -1385,6 +1385,25 @@ async def settings_page(request: Request):
 async def help_page(request: Request):
     """Rendert die Hilfeseite."""
     return templates.TemplateResponse("help.html", get_template_context(request, "help"))
+
+
+@app.get("/api/set-language")
+async def set_language(lang: str = Query("de"), redirect: str = Query("/")):
+    """
+    Setzt die Sprache und leitet zur angegebenen Seite weiter.
+
+    Args:
+        lang: Sprach-Code ("de" oder "en")
+        redirect: Pfad zur Weiterleitung nach dem Sprachwechsel
+    """
+    global config
+    if lang in TRANSLATIONS:
+        config.language = lang
+        config.save()
+        logger.info(f"Language changed to: {lang}")
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=redirect, status_code=303)
 
 
 @app.get("/api/stats")
