@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form hx-post="/save_config_all" hx-swap="none" class="space-y-6">
+    
+    <!-- Save Button (Sticky) -->
+    <div class="sticky top-0 z-10 glass rounded-xl p-4 shadow-xl flex justify-between items-center">
+        <h2 class="text-xl font-semibold">⚙️ {{ t.nav_settings }}</h2>
+        <div class="flex items-center gap-4">
+            <select name="language" class="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm" onchange="this.form.submit()">
+                <option value="en" {% if config.language == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                <option value="de" {% if config.language == 'de' %}selected{% endif %}>🇩🇪 Deutsch</option>
+            </select>
+            <button type="submit" class="px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg font-medium transition-all">
+                💾 {{ t.save_all }}
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column -->
+        <div class="space-y-6">
+            
+            <!-- Paths Section -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">📁 {{ t.paths }}</h3>
+                    <button type="button" onclick="toggleHelp('paths-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ Hilfe</button>
+                </div>
+                <div id="paths-help" class="hidden mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-gray-300">
+                    <p><strong>Video Paths:</strong> Pfade zu deinen Medien (kommasepariert)</p>
+                    <p class="mt-2"><strong>Priority Paths:</strong> Diese werden zuerst geladen</p>
+                    <p class="mt-2"><strong>Exclude Patterns:</strong> Ordner die übersprungen werden (z.B. */Samples/*)</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.video_paths }}</label>
+                        <textarea name="video_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-20" placeholder="/data/movies, /data/tv">{{ config.video_paths|join(', ') }}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.priority_paths }}</label>
+                        <textarea name="priority_paths" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16">{{ config.priority_paths|join(', ') }}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.exclude_patterns }}</label>
+                        <textarea name="exclude_patterns" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-16">{{ config.exclude_patterns|join(', ') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preload Settings -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">⚡ {{ t.preload_settings }}</h3>
+                    <button type="button" onclick="toggleHelp('preload-help')" class="text-xs text-blue-400 hover:text-blue-300">❓ Hilfe</button>
+                </div>
+                <div id="preload-help" class="hidden mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-gray-300">
+                    <p><strong>Head Preload:</strong> Wie viel MB vom Anfang der Datei geladen wird (für schnellen Start)</p>
+                    <p class="mt-2"><strong>Tail Preload:</strong> MB vom Ende (für Seek-Vorschau)</p>
+                    <p class="mt-2"><strong>Cache Threshold:</strong> Dateien mit Lesezeit unter diesem Wert gelten als gecached</p>
+                </div>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.head_preload }}</label>
+                            <input type="number" name="preload_head_mb" value="{{ config.preload_head_mb }}" min="1" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.tail_preload }}</label>
+                            <input type="number" name="preload_tail_mb" value="{{ config.preload_tail_mb }}" min="1" max="100" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.min_file_size }}</label>
+                            <input type="number" name="min_size_mb" value="{{ config.min_size_mb }}" min="50" max="5000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.max_files_per_run }}</label>
+                            <input type="number" name="max_files_per_run" value="{{ config.max_files_per_run }}" min="5" max="500" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.cache_threshold }}</label>
+                            <input type="number" name="cache_threshold_ms" value="{{ config.cache_threshold_ms }}" min="10" max="1000" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.max_ram_usage }}: <span id="ram-value">{{ config.ram_max_usage_percent }}</span>%</label>
+                            <input type="range" name="ram_max_usage_percent" min="10" max="95" value="{{ config.ram_max_usage_percent }}" class="w-full accent-blue-500 mt-2" oninput="document.getElementById('ram-value').innerText = this.value">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.video_extensions }}</label>
+                        <input type="text" name="video_extensions" value="{{ config.video_extensions|join(', ') }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scheduler -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">⏰ {{ t.auto_scheduler }}</h3>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="scheduler_enabled" class="sr-only peer" {% if config.scheduler_enabled %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                    </label>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.cron_schedule }}</label>
+                        <input type="text" name="cron_schedule" value="{{ config.cron_schedule }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm font-mono">
+                        <p class="text-xs text-gray-500 mt-1">{{ t.cron_format }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="space-y-6">
+
+            <!-- Tautulli Integration -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">📺 {{ t.tautulli_integration }}</h3>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="tautulli_enabled" class="sr-only peer" {% if config.tautulli_enabled %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                    </label>
+                </div>
+                <div id="tautulli-help" class="hidden mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-gray-300">
+                    <p>Tautulli ist ein Monitoring-Tool für Plex. Es ermöglicht intelligentes Caching basierend auf Wiedergabestatistiken.</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.tautulli_url }}</label>
+                        <input type="url" name="tautulli_url" value="{{ config.tautulli_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://tautulli:8181">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.api_key }}</label>
+                        <input type="password" name="tautulli_api_key" value="{{ config.tautulli_api_key }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                    </div>
+                    <button type="button" hx-get="/api/test-tautulli" hx-target="#tautulli-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 {{ t.test_connection }}</button>
+                    <span id="tautulli-test" class="text-xs ml-2"></span>
+
+                    <!-- Caching Strategies -->
+                    <div class="mt-4 pt-4 border-t border-slate-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-sm font-semibold">📊 {{ t.caching_strategies }}</h4>
+                            <button type="button" onclick="toggleHelp('strategies-help')" class="text-xs text-blue-400">❓</button>
+                        </div>
+                        <div id="strategies-help" class="hidden mb-3 p-2 bg-blue-900/20 border border-blue-800 rounded text-xs text-gray-300">
+                            <p><strong>Neueste Releases:</strong> Filme/Serien nach Erscheinungsdatum</p>
+                            <p><strong>Meistgesehen:</strong> Populäre Inhalte der letzten 30 Tage</p>
+                            <p><strong>Zuletzt hinzugefügt:</strong> Neue Downloads in der Bibliothek</p>
+                        </div>
+
+                        {% for strat in [
+                            {'key': 'recent_releases', 'icon': '📅', 'name': t.recent_releases, 'desc': t.recent_releases_desc, 'enabled': config.cache_recent_releases, 'movies': config.cache_recent_movies_count, 'shows': config.cache_recent_shows_count, 'movies_field': 'cache_recent_movies_count', 'shows_field': 'cache_recent_shows_count', 'enabled_field': 'cache_recent_releases'},
+                            {'key': 'most_watched', 'icon': '👀', 'name': t.most_watched, 'desc': t.most_watched_desc, 'enabled': config.cache_most_watched, 'movies': config.cache_most_watched_movies_count, 'shows': config.cache_most_watched_shows_count, 'movies_field': 'cache_most_watched_movies_count', 'shows_field': 'cache_most_watched_shows_count', 'enabled_field': 'cache_most_watched'},
+                            {'key': 'recently_added', 'icon': '➕', 'name': t.recently_added, 'desc': t.recently_added_desc, 'enabled': config.cache_recently_added, 'movies': config.cache_recently_added_movies_count, 'shows': config.cache_recently_added_shows_count, 'movies_field': 'cache_recently_added_movies_count', 'shows_field': 'cache_recently_added_shows_count', 'enabled_field': 'cache_recently_added'}
+                        ] %}
+                        <div class="bg-slate-800/30 rounded-lg p-3 mb-2">
+                            <div class="flex items-center justify-between mb-2">
+                                <div>
+                                    <span class="text-sm">{{ strat.icon }} {{ strat.name }}</span>
+                                    <p class="text-xs text-gray-500">{{ strat.desc }}</p>
+                                </div>
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" name="{{ strat.enabled_field }}" class="sr-only peer" {% if strat.enabled %}checked{% endif %}>
+                                    <div class="w-9 h-5 bg-slate-700 peer-checked:bg-green-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all relative"></div>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs text-gray-500">🎬 {{ t.movies_count }}</label>
+                                    <input type="number" name="{{ strat.movies_field }}" value="{{ strat.movies }}" min="0" max="100" class="w-full bg-slate-900/50 border border-slate-700 rounded p-1.5 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500">📺 {{ t.shows_count }}</label>
+                                    <input type="number" name="{{ strat.shows_field }}" value="{{ strat.shows }}" min="0" max="100" class="w-full bg-slate-900/50 border border-slate-700 rounded p-1.5 text-sm">
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Monitoring -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">📡 {{ t.live_monitoring }}</h3>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="live_monitoring_enabled" class="sr-only peer" {% if config.live_monitoring_enabled %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 mb-4">{{ t.live_monitoring_desc }}</p>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.live_check_interval }}</label>
+                            <input type="number" name="live_check_interval_seconds" value="{{ config.live_check_interval_seconds }}" min="10" max="300" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.live_episodes_count }}</label>
+                            <input type="number" name="live_episodes_to_preload" value="{{ config.live_episodes_to_preload }}" min="1" max="10" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">🔄 {{ t.path_mappings }}</label>
+                        <textarea name="path_mappings" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm h-20 font-mono" placeholder="/media/tv:/data/tv">{{ config.path_mappings|join('\n') }}</textarea>
+                        <p class="text-xs text-gray-500 mt-1">{{ t.path_mappings_hint }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plex Integration -->
+            <div class="glass rounded-xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">🎬 {{ t.plex_integration }}</h3>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="plex_enabled" class="sr-only peer" {% if config.plex_enabled %}checked{% endif %}>
+                        <div class="w-11 h-6 bg-slate-700 peer-checked:bg-blue-600 rounded-full peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all relative"></div>
+                    </label>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.plex_url }}</label>
+                        <input type="url" name="plex_url" value="{{ config.plex_url }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm" placeholder="http://plex:32400">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 mb-1">{{ t.plex_token }}</label>
+                        <input type="password" name="plex_token" value="{{ config.plex_token }}" class="w-full bg-slate-800/50 border border-slate-700 rounded p-2 text-sm">
+                    </div>
+                    <button type="button" hx-get="/api/test-plex" hx-target="#plex-test" class="text-xs text-blue-400 hover:text-blue-300">🔌 {{ t.test_connection }}</button>
+                    <span id="plex-test" class="text-xs ml-2"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function toggleHelp(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('hidden');
+}
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if(evt.detail.pathInfo.requestPath === '/api/test-tautulli') {
+        const data = JSON.parse(evt.detail.xhr.response);
+        document.getElementById('tautulli-test').innerHTML = data.status === 'success'
+            ? '<span class="text-green-400">✓ ' + data.message + '</span>'
+            : '<span class="text-red-400">✗ ' + data.message + '</span>';
+    }
+    if(evt.detail.pathInfo.requestPath === '/api/test-plex') {
+        const data = JSON.parse(evt.detail.xhr.response);
+        document.getElementById('plex-test').innerHTML = data.status === 'success'
+            ? '<span class="text-green-400">✓ ' + data.message + '</span>'
+            : '<span class="text-red-400">✗ ' + data.message + '</span>';
+    }
+});
+</script>
+{% endblock %}
+

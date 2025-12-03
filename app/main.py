@@ -37,9 +37,13 @@ TRANSLATIONS = {
         "duration": "Duration",
         "last_run": "Last Run",
         "run_now": "Run Preloader Now",
+        "active": "Active",
         "running": "Running...",
         "history": "History",
         "live_logs": "Live Logs",
+        "nav_dashboard": "Dashboard",
+        "nav_settings": "Settings",
+        "nav_help": "Help",
         "paths": "Paths",
         "video_paths": "Video Paths (comma-separated)",
         "priority_paths": "Priority Paths (loaded first)",
@@ -148,6 +152,7 @@ TRANSLATIONS = {
         "test_connection": "Verbindung testen",
         "save_all": "Alle Einstellungen speichern",
         "quick_info": "Kurzinfo",
+        "active": "Aktiv",
         "paths_mapped": "Pfade gemappt auf",
         "plex_webhook": "Plex Webhook",
         "config_saved_in": "Config gespeichert in",
@@ -159,6 +164,9 @@ TRANSLATIONS = {
         "loading_history": "Lade Verlauf...",
         "waiting_logs": "Warte auf Logs...",
         "api_key": "API-Key",
+        "nav_dashboard": "Dashboard",
+        "nav_settings": "Einstellungen",
+        "nav_help": "Hilfe",
         "language": "Sprache",
         "tautulli_integration": "Tautulli-Integration",
         "tautulli_url": "Tautulli URL",
@@ -1347,22 +1355,36 @@ app = FastAPI(title="Unraid Video Preloader", lifespan=lifespan)
 
 # --- ROUTES ---
 
+def get_template_context(request: Request, active_page: str = "dashboard") -> dict:
+    """Erstellt den Standard-Kontext für Templates."""
+    lang = config.language if config.language in TRANSLATIONS else "en"
+    return {
+        "request": request,
+        "config": config,
+        "state": state,
+        "version": VERSION,
+        "t": TRANSLATIONS[lang],
+        "lang": lang,
+        "active_page": active_page
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Rendert die Hauptseite mit Konfiguration und Status."""
-    lang = config.language if config.language in TRANSLATIONS else "en"
-    t = TRANSLATIONS[lang]
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "config": config,
-            "state": state,
-            "version": VERSION,
-            "t": t,
-            "lang": lang
-        }
-    )
+    """Rendert das Dashboard (Hauptseite)."""
+    return templates.TemplateResponse("dashboard.html", get_template_context(request, "dashboard"))
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Rendert die Einstellungsseite."""
+    return templates.TemplateResponse("settings.html", get_template_context(request, "settings"))
+
+
+@app.get("/help", response_class=HTMLResponse)
+async def help_page(request: Request):
+    """Rendert die Hilfeseite."""
+    return templates.TemplateResponse("help.html", get_template_context(request, "help"))
 
 
 @app.get("/api/stats")

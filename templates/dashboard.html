@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Main Controls -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Dashboard Card -->
+        <div class="glass rounded-xl p-6 shadow-xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">{{ t.status }}</h2>
+                <span id="status-text" class="text-sm font-mono text-blue-300">Idle</span>
+            </div>
+
+            <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                    <div id="stat-preloaded" class="text-2xl font-bold text-emerald-400">{{ state.last_run_stats.preloaded }}</div>
+                    <div class="text-xs text-gray-400">{{ t.loaded }}</div>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                    <div id="stat-cached" class="text-2xl font-bold text-blue-400">{{ state.last_run_stats.total_cached }}</div>
+                    <div class="text-xs text-gray-400">{{ t.total_cached }}</div>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                    <div id="stat-skipped" class="text-2xl font-bold text-yellow-400">{{ state.last_run_stats.skipped }}</div>
+                    <div class="text-xs text-gray-400">{{ t.skipped }}</div>
+                </div>
+                <div class="bg-slate-800/50 p-4 rounded-lg text-center">
+                    <div id="stat-duration" class="text-2xl font-bold text-purple-400">{{ "%.1f"|format(state.last_run_stats.duration) }}s</div>
+                    <div class="text-xs text-gray-400">{{ t.duration }}</div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button hx-post="/start" hx-swap="none" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 py-3 rounded-lg font-medium transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg">
+                    ▶️ {{ t.start_preload }}
+                </button>
+                <button hx-get="/api/clear-stats" hx-swap="none" class="px-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🗑️</button>
+            </div>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="glass rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold mb-4">📜 {{ t.live_logs }}</h2>
+            <div id="logs" hx-get="/api/logs" hx-trigger="every 2s" class="bg-slate-900/50 rounded-lg p-4 h-64 overflow-y-auto font-mono text-sm space-y-1">
+                <p class="text-gray-500">{{ t.waiting_logs }}</p>
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="glass rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold mb-4">📋 {{ t.history }}</h2>
+            <div id="history" hx-get="/api/history" hx-trigger="load, every 30s" class="bg-slate-900/50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <p class="text-gray-500 text-sm">{{ t.loading_history }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-6">
+        <!-- Quick Status -->
+        <div class="glass rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold mb-4">📊 {{ t.quick_info }}</h2>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">{{ t.paths_mapped }}</span>
+                    <span class="text-white">{{ config.video_paths|length }} {{ t.paths }}</span>
+                </div>
+                {% if config.scheduler_enabled %}
+                <div class="flex justify-between">
+                    <span class="text-gray-400">⏰ Scheduler</span>
+                    <span class="text-green-400">{{ config.cron_schedule }}</span>
+                </div>
+                {% endif %}
+                {% if config.tautulli_enabled %}
+                <div class="flex justify-between">
+                    <span class="text-gray-400">📺 Tautulli</span>
+                    <span class="text-green-400">✓ {{ t.active }}</span>
+                </div>
+                {% endif %}
+                {% if config.live_monitoring_enabled %}
+                <div class="flex justify-between">
+                    <span class="text-gray-400">📡 Live-Monitoring</span>
+                    <span class="text-green-400">✓ {{ t.active }}</span>
+                </div>
+                {% endif %}
+                {% if config.plex_enabled %}
+                <div class="flex justify-between">
+                    <span class="text-gray-400">🎬 Plex Webhook</span>
+                    <span class="text-green-400">✓ {{ t.active }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-700">
+                <a href="/settings" class="block w-full text-center py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
+                    ⚙️ {{ t.nav_settings }}
+                </a>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="glass rounded-xl p-6 shadow-xl">
+            <h2 class="text-xl font-semibold mb-4">⚡ Quick Actions</h2>
+            <div class="space-y-2">
+                {% if config.tautulli_enabled %}
+                <button hx-get="/api/test-tautulli" hx-target="#quick-result" class="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
+                    🔌 Test Tautulli
+                </button>
+                {% endif %}
+                {% if config.plex_enabled %}
+                <button hx-get="/api/test-plex" hx-target="#quick-result" class="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
+                    🎬 Test Plex
+                </button>
+                {% endif %}
+                {% if config.live_monitoring_enabled %}
+                <button hx-get="/api/test-live-monitoring" hx-target="#quick-result" class="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-all">
+                    📡 Test Live-Monitoring
+                </button>
+                {% endif %}
+            </div>
+            <div id="quick-result" class="mt-3 text-xs"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        if(evt.detail.pathInfo.requestPath === '/api/stats') {
+            const data = JSON.parse(evt.detail.xhr.response);
+            document.getElementById('status-text').innerText = data.status;
+            document.getElementById('stat-preloaded').innerText = data.stats.preloaded;
+            document.getElementById('stat-cached').innerText = data.stats.total_cached;
+            document.getElementById('stat-skipped').innerText = data.stats.skipped;
+            document.getElementById('stat-duration').innerText = data.stats.duration.toFixed(1) + 's';
+        }
+    });
+</script>
+{% endblock %}
+
